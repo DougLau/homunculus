@@ -1,0 +1,8 @@
+[package]
+name = "homunculus"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gltf = "1.0"
+gltf-json = "1.0"
