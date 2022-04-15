@@ -1,4 +1,5 @@
 pub mod glb;
+pub mod mesh;
 
 fn main() {
     let vertices = vec![

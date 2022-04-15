@@ -8,6 +8,7 @@ use gltf_json::{
     {Accessor, Buffer, Index, Mesh, Node, Root, Scene, Value},
 };
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fs::File;
 use std::mem::size_of;
 
@@ -102,7 +103,7 @@ pub fn export<V: Vtx>(filename: &str, vertices: &[V]) {
     };
     let primitive = Primitive {
         attributes: {
-            let mut map = std::collections::HashMap::new();
+            let mut map = HashMap::new();
             map.insert(Valid(Semantic::Positions), Index::new(0));
             map.insert(Valid(Semantic::Normals), Index::new(1));
             map
