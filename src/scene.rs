@@ -1,4 +1,4 @@
-use crate::mesh::Vec3;
+use crate::mesh;
 use gltf::binary::{Glb, Header};
 use gltf_json::{
     accessor::{ComponentType, GenericComponentType, Type},
@@ -33,7 +33,7 @@ impl BufferBuilder {
         let bin = vec![];
         BufferBuilder { index, bin }
     }
-    fn push_view<V>(&mut self, buf: &[V]) -> View {
+    fn push_view<V>(&mut self, buf: &[V], target: Target) -> View {
         while self.bin.len() % 3 != 0 {
             self.bin.push(0);
         }
@@ -46,7 +46,7 @@ impl BufferBuilder {
             byte_length,
             byte_offset,
             byte_stride: Some(size_of::<V>() as u32),
-            target: Some(Valid(Target::ArrayBuffer)),
+            target: Some(Valid(target)),
             name: None,
             extensions: Default::default(),
             extras: Default::default(),
@@ -67,27 +67,45 @@ impl BufferBuilder {
     }
 }
 
-pub fn export(filename: &str, positions: &[Vec3], normals: &[Vec3]) {
-    assert_eq!(positions.len(), normals.len());
-    let count = positions.len() as u32;
-    let min = positions
+pub fn export(filename: &str, mesh: &mesh::Mesh) {
+    assert_eq!(mesh.positions().len(), mesh.normals().len());
+    let count = mesh.positions().len() as u32;
+    let min = mesh
+        .positions()
         .iter()
         .map(|v| *v)
         .reduce(|min, v| v.min(min))
         .unwrap();
-    let max = positions
+    let max = mesh
+        .positions()
         .iter()
         .map(|v| *v)
         .reduce(|max, v| v.max(max))
         .unwrap();
     let mut builder = BufferBuilder::new(0);
-    let pos_view = builder.push_view(positions);
-    let norm_view = builder.push_view(normals);
+    let idx_view =
+        builder.push_view(mesh.indices(), Target::ElementArrayBuffer);
+    let pos_view = builder.push_view(mesh.positions(), Target::ArrayBuffer);
+    let norm_view = builder.push_view(mesh.normals(), Target::ArrayBuffer);
     let (buffer, bin) = builder.build();
     let buffer_len: u32 = bin.len().try_into().unwrap();
     let bin = Some(Cow::Owned(bin));
-    let pos_accessor = Accessor {
+    let idx_accessor = Accessor {
         buffer_view: Some(Index::new(0)),
+        byte_offset: 0,
+        count: mesh.indices().len() as u32,
+        component_type: Valid(GenericComponentType(ComponentType::U16)),
+        type_: Valid(Type::Scalar),
+        min: None,
+        max: None,
+        name: None,
+        normalized: false,
+        sparse: None,
+        extensions: Default::default(),
+        extras: Default::default(),
+    };
+    let pos_accessor = Accessor {
+        buffer_view: Some(Index::new(1)),
         byte_offset: 0,
         count,
         component_type: Valid(GenericComponentType(ComponentType::F32)),
@@ -101,7 +119,7 @@ pub fn export(filename: &str, positions: &[Vec3], normals: &[Vec3]) {
         extras: Default::default(),
     };
     let norm_accessor = Accessor {
-        buffer_view: Some(Index::new(1)),
+        buffer_view: Some(Index::new(2)),
         byte_offset: 0,
         count,
         component_type: Valid(GenericComponentType(ComponentType::F32)),
@@ -117,12 +135,12 @@ pub fn export(filename: &str, positions: &[Vec3], normals: &[Vec3]) {
     let primitive = Primitive {
         attributes: {
             let mut map = HashMap::new();
-            map.insert(Valid(Semantic::Positions), Index::new(0));
-            map.insert(Valid(Semantic::Normals), Index::new(1));
+            map.insert(Valid(Semantic::Positions), Index::new(1));
+            map.insert(Valid(Semantic::Normals), Index::new(2));
             map
         },
         mode: Valid(Mode::Triangles),
-        indices: None,
+        indices: Some(Index::new(0)),
         material: None,
         targets: None,
         extensions: Default::default(),
@@ -151,8 +169,8 @@ pub fn export(filename: &str, positions: &[Vec3], normals: &[Vec3]) {
     };
     let root = Root {
         buffers: vec![buffer],
-        buffer_views: vec![pos_view, norm_view],
-        accessors: vec![pos_accessor, norm_accessor],
+        buffer_views: vec![idx_view, pos_view, norm_view],
+        accessors: vec![idx_accessor, pos_accessor, norm_accessor],
         meshes: vec![mesh],
         nodes: vec![node],
         scenes: vec![Scene {

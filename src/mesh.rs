@@ -97,11 +97,20 @@ pub enum Edge {
 }
 
 /// Triangle face
+///
+/// Vertices and edges:
+/// ```
+/// v0______v2
+///   \ e2 /
+/// e0 \  / e1
+///     \/
+///     v1
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Face {
     /// Vertex positions
     vtx: [usize; 3],
-    /// Edge smoothing (clockwise from vertices)
+    /// Edge smoothing
     edge: [Edge; 3],
 }
 
@@ -131,9 +140,20 @@ impl Face {
         Self { vtx, edge }
     }
 
-    /// Make flat (not smooth)
-    pub fn flatten(&mut self) {
+    /// Make shading flat (not smooth)
+    pub fn with_flat(mut self) -> Self {
         self.edge = [Edge::Sharp; 3];
+        self
+    }
+
+    /// Check if a vertex is next to a sharp edge
+    fn is_sharp_vertex(&self, idx: usize) -> bool {
+        (self.vtx[0] == idx
+            && (self.edge[0] == Edge::Sharp || self.edge[2] == Edge::Sharp))
+            || (self.vtx[1] == idx
+                && (self.edge[1] == Edge::Sharp || self.edge[0] == Edge::Sharp))
+            || (self.vtx[2] == idx
+                && (self.edge[2] == Edge::Sharp || self.edge[1] == Edge::Sharp))
     }
 }
 
@@ -169,10 +189,44 @@ impl MeshBuilder {
     /// Split vertices at edge seams
     fn split_edge_seams(mut self) -> Self {
         let vertices = self.pos.len();
-        for _idx in 0..vertices {
-            //todo!();
+        for idx in 0..vertices {
+            while self.vertex_needs_split(idx) {
+                self.split_vertex(idx);
+            }
         }
         self
+    }
+
+    /// Check if a vertex needs splitting
+    fn vertex_needs_split(&self, idx: usize) -> bool {
+        let mut found = false;
+        for face in &self.faces {
+            if face.is_sharp_vertex(idx) {
+                if found {
+                    return true;
+                }
+                found = true;
+            }
+        }
+        false
+    }
+
+    /// Split one vertex
+    fn split_vertex(&mut self, idx: usize) {
+        let pos = self.pos[idx];
+        let i = self.push_vtx(pos);
+        for face in &mut self.faces {
+            if face.is_sharp_vertex(idx) {
+                if face.vtx[0] == idx {
+                    face.vtx[0] = i;
+                } else if face.vtx[1] == idx {
+                    face.vtx[1] = i;
+                } else if face.vtx[2] == idx {
+                    face.vtx[2] = i;
+                }
+                break;
+            }
+        }
     }
 
     /// Calculate normals for all vertices
