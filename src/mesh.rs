@@ -1,7 +1,7 @@
 use core::ops::{AddAssign, Mul, Sub};
 
 /// Vector of 3 components
-#[repr(transparent)]
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Vec3(pub [f32; 3]);
 
@@ -39,14 +39,26 @@ impl Mul<f32> for Vec3 {
 }
 
 impl Vec3 {
-    const fn x(self) -> f32 {
+    pub const fn x(self) -> f32 {
         self.0[0]
     }
-    const fn y(self) -> f32 {
+    pub const fn y(self) -> f32 {
         self.0[1]
     }
-    const fn z(self) -> f32 {
+    pub const fn z(self) -> f32 {
         self.0[2]
+    }
+    pub fn min(self, rhs: Self) -> Self {
+        let x = self.x().min(rhs.x());
+        let y = self.y().min(rhs.y());
+        let z = self.z().min(rhs.z());
+        Vec3([x, y, z])
+    }
+    pub fn max(self, rhs: Self) -> Self {
+        let x = self.x().max(rhs.x());
+        let y = self.y().max(rhs.y());
+        let z = self.z().max(rhs.z());
+        Vec3([x, y, z])
     }
     fn magnitude(self) -> f32 {
         (self.x() * self.x() + self.y() * self.y() + self.z() * self.z()).sqrt()
@@ -70,11 +82,10 @@ impl Vec3 {
     }
     fn angle(self, rhs: Vec3) -> f32 {
         let mag = self.magnitude() * rhs.magnitude();
-        if mag != 0.0 {
-            self.dot(rhs) / mag
-        } else {
-            0.0
-        }.min(1.0).max(-1.0).acos()
+        if mag != 0.0 { self.dot(rhs) / mag } else { 0.0 }
+            .min(1.0)
+            .max(-1.0)
+            .acos()
     }
 }
 

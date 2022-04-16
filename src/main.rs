@@ -1,20 +1,18 @@
-pub mod glb;
 pub mod mesh;
+pub mod scene;
+
+use mesh::Vec3;
 
 fn main() {
-    let vertices = vec![
-        glb::VtxPosNorm {
-            pos: [0.0, 0.5, 0.0],
-            norm: [1.0, 0.0, 0.0],
-        },
-        glb::VtxPosNorm {
-            pos: [-0.5, -0.5, 0.0],
-            norm: [0.0, 1.0, 0.0],
-        },
-        glb::VtxPosNorm {
-            pos: [0.5, -0.5, 0.0],
-            norm: [0.0, 0.0, 1.0],
-        },
+    let positions = vec![
+        Vec3([0.0, 0.5, 0.0]),
+        Vec3([-0.5, -0.5, 0.0]),
+        Vec3([0.5, -0.5, 0.0]),
     ];
-    glb::export("test.glb", &vertices);
+    let normals = vec![
+        Vec3([1.0, 0.0, 0.0]),
+        Vec3([0.0, 1.0, 0.0]),
+        Vec3([0.0, 0.0, 1.0]),
+    ];
+    scene::export("test.glb", &positions, &normals);
 }
