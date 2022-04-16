@@ -1,7 +1,7 @@
 use core::ops::{AddAssign, Mul, Sub};
 
 /// Vector of 3 components
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Vec3(pub [f32; 3]);
 
@@ -63,6 +63,7 @@ impl Vec3 {
     fn magnitude(self) -> f32 {
         (self.x() * self.x() + self.y() * self.y() + self.z() * self.z()).sqrt()
     }
+    #[must_use]
     fn cross(self, rhs: Vec3) -> Vec3 {
         let x = self.y() * rhs.z() - self.z() * rhs.y();
         let y = self.z() * rhs.x() - self.x() * rhs.z();
@@ -72,6 +73,7 @@ impl Vec3 {
     fn dot(self, rhs: Vec3) -> f32 {
         self.x() * rhs.x() + self.y() * rhs.y() + self.z() + rhs.z()
     }
+    #[must_use]
     fn normalize(self) -> Vec3 {
         let mag = self.magnitude();
         if mag != 0.0 {
@@ -244,7 +246,7 @@ impl MeshBuilder {
             let a2 = (pos[0] - pos[2]).angle(pos[1] - pos[2]);
             norm[vtx[2]] += trin * a2;
         }
-        norm
+        norm.iter().map(|n| n.normalize()).collect()
     }
 
     /// Build `Vec` of indices for all faces
