@@ -285,4 +285,22 @@ impl Mesh {
     pub fn indices(&self) -> &[Vertex] {
         &self.indices[..]
     }
+
+    /// Get minimum position
+    pub fn pos_min(&self) -> Vec3 {
+        self.positions()
+            .iter()
+            .map(|v| *v)
+            .reduce(|min, v| v.min(min))
+            .unwrap()
+    }
+
+    /// Get maximum position
+    pub fn pos_max(&self) -> Vec3 {
+        self.positions()
+            .iter()
+            .map(|v| *v)
+            .reduce(|max, v| v.max(max))
+            .unwrap()
+    }
 }

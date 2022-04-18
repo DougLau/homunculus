@@ -1,4 +1,4 @@
-use crate::mesh;
+use crate::mesh::Mesh;
 use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
 use std::fs::File;
@@ -19,9 +19,15 @@ enum Target {
     ElementArrayBuffer = 34963,
 }
 
-struct BufferBuilder {
-    index: u32,
+struct Builder {
     bin: Vec<u8>,
+    views: Vec<Value>,
+    accessors: Vec<Value>,
+    meshes: Vec<Value>,
+}
+
+struct Glb {
+    writer: File,
 }
 
 fn as_u8_slice<T: Sized>(p: &[T]) -> &[u8] {
@@ -29,10 +35,62 @@ fn as_u8_slice<T: Sized>(p: &[T]) -> &[u8] {
     body
 }
 
-impl BufferBuilder {
-    fn new(index: u32) -> BufferBuilder {
+impl Builder {
+    fn new() -> Builder {
         let bin = vec![];
-        BufferBuilder { index, bin }
+        let views = vec![];
+        let accessors = vec![];
+        let meshes = vec![];
+        Builder {
+            bin,
+            views,
+            accessors,
+            meshes,
+        }
+    }
+    fn add_mesh(&mut self, mesh: &Mesh) {
+        let count = mesh.positions().len();
+        let idx_view = self.views.len();
+        self.accessors.push(json!({
+            "bufferView": idx_view,
+            "componentType": ComponentType::U16,
+            "type": "SCALAR",
+            "count": mesh.indices().len(),
+        }));
+        let v = self.push_view(mesh.indices(), Target::ElementArrayBuffer);
+        self.views.push(v);
+
+        let pos_view = self.views.len();
+        self.accessors.push(json!({
+            "bufferView": pos_view,
+            "componentType": ComponentType::F32,
+            "type": "VEC3",
+            "count": count,
+            "min": mesh.pos_min(),
+            "max": mesh.pos_max(),
+        }));
+        let v = self.push_view(mesh.positions(), Target::ArrayBuffer);
+        self.views.push(v);
+
+        let norm_view = self.views.len();
+        self.accessors.push(json!({
+            "bufferView": norm_view,
+            "componentType": ComponentType::F32,
+            "type": "VEC3",
+            "count": count,
+        }));
+        let v = self.push_view(mesh.normals(), Target::ArrayBuffer);
+        self.views.push(v);
+
+        self.meshes.push(json!({
+            "primitives": [{
+                "attributes": {
+                    "POSITION": pos_view,
+                    "NORMAL": norm_view,
+                },
+                "indices": idx_view,
+            }],
+        }));
     }
     fn push_view<V>(&mut self, buf: &[V], target: Target) -> Value {
         while self.bin.len() % 4 != 0 {
@@ -42,93 +100,42 @@ impl BufferBuilder {
         let bytes = as_u8_slice(buf);
         self.bin.extend_from_slice(bytes);
         json!({
-            "buffer": self.index,
+            "buffer": 0,
             "byteLength": bytes.len(),
             "byteOffset": byte_offset,
             "byteStride": size_of::<V>(),
             "target": target,
         })
     }
-    fn build(self) -> Vec<u8> {
-        self.bin
+    fn json(&self) -> Value {
+        json!({
+            "asset": {
+                "version": "2.0"
+            },
+            "buffers": [{
+                "byteLength": self.bin.len(),
+            }],
+            "bufferViews": self.views,
+            "accessors": self.accessors,
+            "meshes": self.meshes,
+            "nodes": [{
+                "mesh": 0
+            }],
+            "scenes": [{
+                "nodes": [0]
+            }],
+        })
+    }
+    fn bin(&self) -> &[u8] {
+        &self.bin
     }
 }
 
-pub fn export(filename: &str, mesh: &mesh::Mesh) -> Result<(), std::io::Error> {
-    let count = mesh.positions().len();
-    let min = mesh
-        .positions()
-        .iter()
-        .map(|v| *v)
-        .reduce(|min, v| v.min(min))
-        .unwrap();
-    let max = mesh
-        .positions()
-        .iter()
-        .map(|v| *v)
-        .reduce(|max, v| v.max(max))
-        .unwrap();
-    let mut builder = BufferBuilder::new(0);
-    let idx_view =
-        builder.push_view(mesh.indices(), Target::ElementArrayBuffer);
-    let pos_view = builder.push_view(mesh.positions(), Target::ArrayBuffer);
-    let norm_view = builder.push_view(mesh.normals(), Target::ArrayBuffer);
-    let bin = builder.build();
-    let buffer = json!({
-        "byteLength": bin.len(),
-    });
-    let accessors = json!(
-        [{
-            "bufferView": 0,
-            "byteOffset": 0,
-            "componentType": ComponentType::U16,
-            "count": mesh.indices().len(),
-            "type": "SCALAR",
-        },
-        {
-            "bufferView": 1,
-            "byteOffset": 0,
-            "componentType": ComponentType::F32,
-            "count": count,
-            "type": "VEC3",
-            "min": min,
-            "max": max,
-        },
-        {
-            "bufferView": 2,
-            "byteOffset": 0,
-            "count": count,
-            "componentType": ComponentType::F32,
-            "type": "VEC3",
-        }]
-    );
-    let meshes = json!(
-        [{
-            "primitives": [{
-                "attributes": {
-                    "POSITION": 1,
-                    "NORMAL": 2,
-                },
-                "indices": 0,
-            }],
-        }]
-    );
-    let root = json!({
-        "asset": {
-            "version": "2.0"
-        },
-        "buffers": [buffer],
-        "bufferViews": [idx_view, pos_view, norm_view],
-        "accessors": accessors,
-        "meshes": meshes,
-        "nodes": [{
-            "mesh": 0
-        }],
-        "scenes": [{
-            "nodes": [0]
-        }],
-    });
-    let mut root_json = root.to_string();
+pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
+    let mut builder = Builder::new();
+    builder.add_mesh(mesh);
+    let bin = builder.bin();
+    let mut root_json = builder.json().to_string();
     while root_json.len() % 4 != 0 {
         root_json.push(' ');
     }
@@ -137,10 +144,6 @@ pub fn export(filename: &str, mesh: &mesh::Mesh) -> Result<(), std::io::Error> {
     glb.write_json(&root_json)?;
     glb.write_bin(&bin)?;
     Ok(())
-}
-
-struct Glb {
-    writer: File,
 }
 
 impl Glb {
