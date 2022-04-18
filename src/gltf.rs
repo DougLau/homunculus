@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
 
+/// Component types for glTF accessor
 #[derive(Serialize_repr)]
 #[repr(u32)]
 enum ComponentType {
@@ -12,6 +13,7 @@ enum ComponentType {
     F32 = 5126,
 }
 
+/// Target for glTF buffer view
 #[derive(Serialize_repr)]
 #[repr(u32)]
 enum Target {
@@ -19,6 +21,7 @@ enum Target {
     ElementArrayBuffer = 34963,
 }
 
+/// Builder for glTF
 struct Builder {
     bin: Vec<u8>,
     views: Vec<Value>,
@@ -26,16 +29,19 @@ struct Builder {
     meshes: Vec<Value>,
 }
 
+/// GLB file writer
 struct Glb {
     writer: File,
 }
 
+/// Transmute a slice of `T` to a slice of `u8`
 fn as_u8_slice<T: Sized>(p: &[T]) -> &[u8] {
     let (_head, body, _tail) = unsafe { p.align_to::<u8>() };
     body
 }
 
 impl Builder {
+    /// Create a new glTF builder
     fn new() -> Builder {
         let bin = vec![];
         let views = vec![];
@@ -48,8 +54,11 @@ impl Builder {
             meshes,
         }
     }
+
+    /// Add a mesh
     fn add_mesh(&mut self, mesh: &Mesh) {
         let count = mesh.positions().len();
+        // indices
         let idx_view = self.views.len();
         self.accessors.push(json!({
             "bufferView": idx_view,
@@ -59,7 +68,7 @@ impl Builder {
         }));
         let v = self.push_view(mesh.indices(), Target::ElementArrayBuffer);
         self.views.push(v);
-
+        // positions
         let pos_view = self.views.len();
         self.accessors.push(json!({
             "bufferView": pos_view,
@@ -71,7 +80,7 @@ impl Builder {
         }));
         let v = self.push_view(mesh.positions(), Target::ArrayBuffer);
         self.views.push(v);
-
+        // normals
         let norm_view = self.views.len();
         self.accessors.push(json!({
             "bufferView": norm_view,
@@ -81,7 +90,7 @@ impl Builder {
         }));
         let v = self.push_view(mesh.normals(), Target::ArrayBuffer);
         self.views.push(v);
-
+        // mesh
         self.meshes.push(json!({
             "primitives": [{
                 "attributes": {
@@ -92,6 +101,8 @@ impl Builder {
             }],
         }));
     }
+
+    /// Push a view
     fn push_view<V>(&mut self, buf: &[V], target: Target) -> Value {
         while self.bin.len() % 4 != 0 {
             self.bin.push(0);
@@ -107,6 +118,8 @@ impl Builder {
             "target": target,
         })
     }
+
+    /// Get root JSON of glTF
     fn json(&self) -> Value {
         json!({
             "asset": {
@@ -126,11 +139,14 @@ impl Builder {
             }],
         })
     }
+
+    /// Get binary buffer
     fn bin(&self) -> &[u8] {
         &self.bin
     }
 }
 
+/// Export a mesh to a GLB file
 pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
     let mut builder = Builder::new();
     builder.add_mesh(mesh);
@@ -147,10 +163,13 @@ pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
 }
 
 impl Glb {
+    /// Create GLB file
     fn create(filename: &str) -> Result<Glb, std::io::Error> {
         let writer = File::create(filename)?;
         Ok(Glb { writer })
     }
+
+    /// Write file header
     fn write_header(
         &mut self,
         chunks: u32,
@@ -162,6 +181,8 @@ impl Glb {
         self.writer.write(&total_len.to_le_bytes())?;
         Ok(())
     }
+
+    /// Write one chunk
     fn write_chunk(
         &mut self,
         ctype: &[u8],
@@ -173,9 +194,13 @@ impl Glb {
         self.writer.write(data)?;
         Ok(())
     }
+
+    /// Write a JSON chunk
     fn write_json(&mut self, json: &str) -> Result<(), std::io::Error> {
         self.write_chunk(b"JSON", json.as_bytes())
     }
+
+    /// Write a BIN chunk
     fn write_bin(&mut self, bin: &[u8]) -> Result<(), std::io::Error> {
         self.write_chunk(b"BIN\0", bin)
     }

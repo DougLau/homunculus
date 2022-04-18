@@ -40,30 +40,43 @@ impl Mul<f32> for Vec3 {
 }
 
 impl Vec3 {
+    /// Get the X component
     pub const fn x(self) -> f32 {
         self.0[0]
     }
+
+    /// Get the Y component
     pub const fn y(self) -> f32 {
         self.0[1]
     }
+
+    /// Get the Z component
     pub const fn z(self) -> f32 {
         self.0[2]
     }
+
+    /// Get minimum of two `Vec3`s
     pub fn min(self, rhs: Self) -> Self {
         let x = self.x().min(rhs.x());
         let y = self.y().min(rhs.y());
         let z = self.z().min(rhs.z());
         Vec3([x, y, z])
     }
+
+    /// Get maximum of two `Vec3`s
     pub fn max(self, rhs: Self) -> Self {
         let x = self.x().max(rhs.x());
         let y = self.y().max(rhs.y());
         let z = self.z().max(rhs.z());
         Vec3([x, y, z])
     }
+
+    /// Calculate vector magnitude
     fn magnitude(self) -> f32 {
         (self.x() * self.x() + self.y() * self.y() + self.z() * self.z()).sqrt()
     }
+
+    /// Calculate cross product of two `Vec3`s
     #[must_use]
     fn cross(self, rhs: Vec3) -> Vec3 {
         let x = self.y() * rhs.z() - self.z() * rhs.y();
@@ -71,9 +84,13 @@ impl Vec3 {
         let z = self.x() * rhs.y() - self.y() * rhs.x();
         Vec3([x, y, z])
     }
+
+    /// Calculate doc product of two `Vec3`s
     fn dot(self, rhs: Vec3) -> f32 {
         self.x() * rhs.x() + self.y() * rhs.y() + self.z() * rhs.z()
     }
+
+    /// Calculate normalized vector
     #[must_use]
     fn normalize(self) -> Vec3 {
         let mag = self.magnitude();
@@ -83,6 +100,8 @@ impl Vec3 {
             self
         }
     }
+
+    /// Calculate angle between two `Vec3`s
     fn angle(self, rhs: Vec3) -> f32 {
         let mag = self.magnitude() * rhs.magnitude();
         if mag != 0.0 { self.dot(rhs) / mag } else { 0.0 }

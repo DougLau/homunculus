@@ -1,9 +1,9 @@
 pub mod gltf;
 pub mod mesh;
 
-use mesh::{Face, MeshBuilder, Vec3};
+use mesh::{Face, Mesh, MeshBuilder, Vec3};
 
-fn main() {
+fn build_cube() -> Mesh {
     let mut builder = MeshBuilder::with_capacity(16);
     builder.push_vtx(Vec3([-0.5, -0.5, 0.5])); // 0 left bottom front
     builder.push_vtx(Vec3([-0.5, 0.5, 0.5])); // 1 left top front
@@ -32,6 +32,10 @@ fn main() {
     // bottom
     builder.push_face(Face::new([2, 0, 4]).with_flat());
     builder.push_face(Face::new([2, 4, 6]).with_flat());
-    let mesh = builder.build();
+    builder.build()
+}
+
+fn main() {
+    let mesh = build_cube();
     gltf::export("test.glb", &mesh).unwrap();
 }
