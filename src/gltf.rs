@@ -140,7 +140,7 @@ pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
         root_json.push(' ');
     }
     let mut glb = Glb::create(filename)?;
-    glb.write_header((root_json.len() + bin.len()).try_into().unwrap())?;
+    glb.write_header(2, (root_json.len() + bin.len()).try_into().unwrap())?;
     glb.write_json(&root_json)?;
     glb.write_bin(&bin)?;
     Ok(())
@@ -151,10 +151,15 @@ impl Glb {
         let writer = File::create(filename)?;
         Ok(Glb { writer })
     }
-    fn write_header(&mut self, len: u32) -> Result<(), std::io::Error> {
+    fn write_header(
+        &mut self,
+        chunks: u32,
+        len: u32,
+    ) -> Result<(), std::io::Error> {
+        let total_len = 12 + chunks * 8 + len;
         self.writer.write(b"glTF")?;
         self.writer.write(&2u32.to_le_bytes())?;
-        self.writer.write(&len.to_le_bytes())?;
+        self.writer.write(&total_len.to_le_bytes())?;
         Ok(())
     }
     fn write_chunk(
