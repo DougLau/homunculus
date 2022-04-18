@@ -1,5 +1,5 @@
+pub mod gltf;
 pub mod mesh;
-pub mod scene;
 
 use mesh::{Face, MeshBuilder, Vec3};
 
@@ -13,6 +13,7 @@ fn main() {
     builder.push_vtx(Vec3([-0.5, 0.5, -0.5])); // 5 left top back
     builder.push_vtx(Vec3([0.5, -0.5, -0.5])); // 6 right bottom back
     builder.push_vtx(Vec3([0.5, 0.5, -0.5])); // 7 right top back
+
     // front
     builder.push_face(Face::new([0, 3, 1]).with_flat());
     builder.push_face(Face::new([0, 2, 3]).with_flat());
@@ -32,5 +33,5 @@ fn main() {
     builder.push_face(Face::new([2, 0, 4]).with_flat());
     builder.push_face(Face::new([2, 4, 6]).with_flat());
     let mesh = builder.build();
-    scene::export("test.glb", &mesh);
+    gltf::export("test.glb", &mesh).unwrap();
 }
