@@ -158,7 +158,7 @@ pub struct Mesh {
 impl Face {
     /// Create a new face
     pub fn new(vtx: [usize; 3]) -> Self {
-        let edge = [Edge::Smooth; 3];
+        let edge = [Edge::Sharp; 3];
         Self { vtx, edge }
     }
 
