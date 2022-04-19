@@ -314,7 +314,7 @@ impl Mesh {
     pub fn pos_min(&self) -> Vec3 {
         self.positions()
             .iter()
-            .map(|v| *v)
+            .copied()
             .reduce(|min, v| v.min(min))
             .unwrap()
     }
@@ -323,7 +323,7 @@ impl Mesh {
     pub fn pos_max(&self) -> Vec3 {
         self.positions()
             .iter()
-            .map(|v| *v)
+            .copied()
             .reduce(|max, v| v.max(max))
             .unwrap()
     }
