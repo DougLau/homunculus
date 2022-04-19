@@ -8,8 +8,13 @@ use std::mem::size_of;
 /// Component types for glTF accessor
 #[derive(Serialize_repr)]
 #[repr(u32)]
+#[allow(unused)]
 enum ComponentType {
+    I8 = 5120,
+    U8 = 5121,
+    I16 = 5122,
     U16 = 5123,
+    U32 = 5125,
     F32 = 5126,
 }
 
