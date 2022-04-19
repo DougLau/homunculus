@@ -187,6 +187,11 @@ impl MeshBuilder {
         MeshBuilder { pos, faces }
     }
 
+    /// Get count of vertices
+    pub fn vertices(&self) -> usize {
+        self.pos.len()
+    }
+
     /// Push a vertex position
     pub fn push_vtx(&mut self, pos: Vec3) -> usize {
         let idx = self.pos.len();
