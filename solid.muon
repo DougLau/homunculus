@@ -1,0 +1,15 @@
+ring:
+  radius: 1.2
+  count: 6
+ring:
+  radius: 1.0
+ring:
+ring:
+  count: 12
+  radius: 0.75
+ring:
+  count: 3
+  radius: 0.2
+ring:
+  count: 1
+  radius: 0.1
