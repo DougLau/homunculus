@@ -6,6 +6,7 @@ version = 3
 name = "homunculus"
 version = "0.1.0"
 dependencies = [
+ "muon-rs",
  "serde",
  "serde_derive",
  "serde_json",
@@ -17,6 +18,15 @@ name = "itoa"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
+
+[[package]]
+name = "muon-rs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f02e0f7cd1f8fb8717cc9ae2375f2b3bcd732ca3c2df81447d71ee4da09be7b"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "proc-macro2"

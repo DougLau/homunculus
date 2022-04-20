@@ -1,4 +1,5 @@
 use crate::mesh::{Face, Mesh, MeshBuilder, Vec3};
+use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 
@@ -9,38 +10,29 @@ struct Point {
     vertex: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Ring {
     number: usize,
     count: usize,
-    up: Vec3,
+    bone: Vec3,
     radius: f32,
+}
+
+#[derive(Deserialize)]
+pub struct RingCfg {
+    name: Option<String>,
+    count: Option<usize>,
+    radius: Option<f32>,
+}
+
+#[derive(Deserialize)]
+pub struct Config {
+    ring: Vec<RingCfg>,
 }
 
 struct SolidBuilder {
     builder: MeshBuilder,
     points: Vec<Point>,
-}
-
-impl Ring {
-    fn new(count: usize) -> Ring {
-        let number = 0;
-        let up = Vec3([0.0, 1.0, 0.0]);
-        let radius = 1.0;
-        Ring { number, count, up, radius }
-    }
-
-    fn next(self, count: usize) -> Ring {
-        let number = self.number + 1;
-        let up = self.up;
-        let radius = self.radius;
-        Ring { number, count, up, radius }
-    }
-
-    fn with_radius(mut self, radius: f32) -> Ring {
-        self.radius = radius;
-        self
-    }
 }
 
 impl SolidBuilder {
@@ -103,24 +95,24 @@ impl SolidBuilder {
     }
 }
 
-pub fn build_solid() -> Mesh {
-    let mut solid = SolidBuilder::new();
-    let ring = Ring::new(8);
-    solid.add_ring(ring);
-    let ring = ring.next(6);
-    solid.add_ring(ring);
-    solid.make_band(0, 1);
-    let ring = ring.next(6).with_radius(1.2);
-    solid.add_ring(ring);
-    solid.make_band(1, 2);
-    let ring = ring.next(4).with_radius(0.75);
-    solid.add_ring(ring);
-    solid.make_band(2, 3);
-    let ring = ring.next(3);
-    solid.add_ring(ring);
-    solid.make_band(3, 4);
-    let ring = ring.next(1);
-    solid.add_ring(ring);
-    solid.make_band(4, 5);
-    solid.builder.build()
+impl Config {
+    pub fn build(self) -> Mesh {
+        let mut solid = SolidBuilder::new();
+        let mut ring = Ring::default();
+        ring.radius = 1.0;
+        for r in self.ring {
+            if let Some(count) = r.count {
+                ring.count = count;
+            }
+            if let Some(radius) = r.radius {
+                ring.radius = radius;
+            }
+            solid.add_ring(ring);
+            if ring.number > 0 {
+                solid.make_band(ring.number - 1, ring.number);
+            }
+            ring.number += 1;
+        }
+        solid.builder.build()
+    }
 }

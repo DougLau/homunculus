@@ -1,9 +1,9 @@
 use core::ops::{AddAssign, Mul, Sub};
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 
 /// Vector of 3 components
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 pub struct Vec3(pub [f32; 3]);
 
 /// Vertex index
