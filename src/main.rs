@@ -5,6 +5,7 @@ pub mod solid;
 
 use argh::FromArgs;
 use std::fs::File;
+use std::path::Path;
 
 /// Command-line arguments
 #[derive(FromArgs, PartialEq, Debug)]
@@ -15,8 +16,11 @@ struct Args {
 
 fn main() {
     let args: Args = argh::from_env();
-    let file = File::open(&args.file).unwrap();
+    let muon = Path::new(&args.file);
+    let stem = muon.file_stem().unwrap();
+    let out = muon.with_file_name(Path::new(stem).with_extension("glb"));
+    let file = File::open(muon).unwrap();
     let cfg: solid::Config = muon_rs::from_reader(file).unwrap();
     let mesh = cfg.build();
-    gltf::export("test.glb", &mesh).unwrap();
+    gltf::export(&out, &mesh).unwrap();
 }

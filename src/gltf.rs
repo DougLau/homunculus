@@ -4,6 +4,7 @@ use serde_repr::Serialize_repr;
 use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
+use std::path::Path;
 
 /// Component types for glTF accessor
 #[derive(Serialize_repr)]
@@ -152,7 +153,10 @@ impl Builder {
 }
 
 /// Export a mesh to a GLB file
-pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
+pub fn export<P: AsRef<Path>>(
+    path: P,
+    mesh: &Mesh,
+) -> Result<(), std::io::Error> {
     let mut builder = Builder::new();
     builder.add_mesh(mesh);
     let bin = builder.bin();
@@ -160,7 +164,7 @@ pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
     while root_json.len() % 4 != 0 {
         root_json.push(' ');
     }
-    let mut glb = Glb::create(filename)?;
+    let mut glb = Glb::create(path)?;
     glb.write_header(2, (root_json.len() + bin.len()).try_into().unwrap())?;
     glb.write_json(&root_json)?;
     glb.write_bin(bin)?;
@@ -169,8 +173,8 @@ pub fn export(filename: &str, mesh: &Mesh) -> Result<(), std::io::Error> {
 
 impl Glb {
     /// Create GLB file
-    fn create(filename: &str) -> Result<Glb, std::io::Error> {
-        let writer = File::create(filename)?;
+    fn create<P: AsRef<Path>>(path: P) -> Result<Glb, std::io::Error> {
+        let writer = File::create(path.as_ref())?;
         Ok(Glb { writer })
     }
 

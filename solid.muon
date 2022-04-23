@@ -8,7 +8,7 @@ ring:
   count: 12
   radius: 0.75
 ring:
-  count: 3
+  count: 4
   radius: 0.2
 ring:
   count: 1
