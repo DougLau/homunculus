@@ -1,4 +1,5 @@
-use crate::mesh::{Face, Mesh, MeshBuilder, Vec3};
+use crate::geom::Vec3;
+use crate::mesh::{Face, Mesh, MeshBuilder};
 
 pub fn build_cube() -> Mesh {
     let mut builder = MeshBuilder::with_capacity(16);

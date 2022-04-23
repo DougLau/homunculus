@@ -1,4 +1,5 @@
-use crate::mesh::{Face, Mesh, MeshBuilder, Vec3};
+use crate::geom::Vec3;
+use crate::mesh::{Face, Mesh, MeshBuilder};
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
