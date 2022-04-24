@@ -11,24 +11,76 @@ struct Point {
     vertex: usize,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 struct Ring {
     number: usize,
-    count: usize,
-    bone: Vec3,
     radius: f32,
+    count: usize,
+    near: Vec<f32>,
+    far: Vec<f32>,
+    bone: Vec3,
 }
 
 #[derive(Deserialize)]
 pub struct RingCfg {
     name: Option<String>,
-    count: Option<usize>,
     radius: Option<f32>,
+    count: Option<usize>,
+    near: Vec<f32>,
+    far: Vec<f32>,
 }
 
 #[derive(Deserialize)]
 pub struct Config {
     ring: Vec<RingCfg>,
+}
+
+impl Ring {
+    fn with_config(&mut self, r: RingCfg) {
+        if let Some(radius) = r.radius {
+            self.radius = radius;
+        }
+        match r.count {
+            Some(count) => {
+                self.count = count;
+                self.near.clear();
+                self.far.clear();
+            }
+            None => {
+                if !r.near.is_empty() || !r.far.is_empty() {
+                    self.count = r.near.len().max(r.far.len());
+                }
+            }
+        }
+        let count = self.count;
+        if !r.near.is_empty() {
+            self.near.clear();
+            self.near.extend_from_slice(r.near.as_slice());
+        }
+        if !r.far.is_empty() {
+            self.far.clear();
+            self.far.extend_from_slice(r.far.as_slice());
+        }
+        for i in 0..count {
+            let near = self.near.get(i);
+            let far = self.far.get(i);
+            match (near, far) {
+                (Some(near), Some(far)) => {
+                    if near >= far {
+                        self.far[i] = *near;
+                    }
+                }
+                (Some(near), None) => self.far.push(*near),
+                (None, Some(far)) => self.near.push(*far),
+                _ => {
+                    self.near.push(1.0);
+                    self.far.push(1.0);
+                }
+            }
+        }
+        self.near.resize(count, 1.0);
+        self.far.resize(count, 1.0);
+    }
 }
 
 struct SolidBuilder {
@@ -54,11 +106,12 @@ impl SolidBuilder {
 
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
-        for i in 0..ring.count {
+        for (i, (near, far)) in ring.near.iter().zip(ring.far).enumerate() {
             let angle = PI * 2.0 * i as f32 / ring.count as f32;
             self.push_point(angle, ring.number);
-            let x = ring.radius * angle.sin();
-            let z = ring.radius * angle.cos();
+            let dist = near;
+            let x = dist * ring.radius * angle.sin();
+            let z = dist * ring.radius * angle.cos();
             self.builder.push_vtx(Vec3([x, y, z]));
         }
     }
@@ -102,13 +155,8 @@ impl Config {
         let mut ring = Ring::default();
         ring.radius = 1.0;
         for r in self.ring {
-            if let Some(count) = r.count {
-                ring.count = count;
-            }
-            if let Some(radius) = r.radius {
-                ring.radius = radius;
-            }
-            solid.add_ring(ring);
+            ring.with_config(r);
+            solid.add_ring(ring.clone());
             if ring.number > 0 {
                 solid.make_band(ring.number - 1, ring.number);
             }

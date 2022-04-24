@@ -3,9 +3,11 @@ ring:
   count: 6
 ring:
   radius: 1.0
+  near: 1 0.1 1 1 1 1
 ring:
+  radius: 0.8
 ring:
-  count: 12
+  count: 5
   radius: 0.75
 ring:
   count: 4
