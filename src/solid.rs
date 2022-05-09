@@ -4,38 +4,75 @@ use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 
+/// A point on a solid surface
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 struct Point {
+    /// Ring number
+    ring_number: usize,
+
+    /// Ring angle
     angle: f32,
-    ring: usize,
+
+    /// Vertex number
     vertex: usize,
 }
 
+/// Ring on surface of solid
 #[derive(Clone, Default)]
 struct Ring {
+    /// Ring number
     number: usize,
+
+    /// Radius of ring
     radius: f32,
+
+    /// Count of points
     count: usize,
+
+    /// Near point limits
     near: Vec<f32>,
+
+    /// Far point limits
     far: Vec<f32>,
+
+    /// Bone vector
     bone: Vec3,
 }
 
+/// Ring configuration
 #[derive(Deserialize)]
 pub struct RingCfg {
+    /// Ring name
     name: Option<String>,
+
+    /// Ring radius
     radius: Option<f32>,
+
+    /// Count of points
     count: Option<usize>,
+
+    /// Near point limits
     near: Vec<f32>,
+
+    /// Far point limits
     far: Vec<f32>,
 }
 
+/// Solid configuration
 #[derive(Deserialize)]
 pub struct Config {
+    /// Vec of all rings
     ring: Vec<RingCfg>,
 }
 
+/// Solid mesh builder
+struct SolidBuilder {
+    builder: MeshBuilder,
+    points: Vec<Point>,
+}
+
 impl Ring {
+    /// Update ring from a configuration
     fn with_config(&mut self, r: RingCfg) {
         if let Some(radius) = r.radius {
             self.radius = radius;
@@ -81,33 +118,38 @@ impl Ring {
         self.near.resize(count, 1.0);
         self.far.resize(count, 1.0);
     }
-}
 
-struct SolidBuilder {
-    builder: MeshBuilder,
-    points: Vec<Point>,
+    /// Calculate the angle of a point
+    fn angle(&self, i: usize) -> f32 {
+        i as f32 / self.count as f32 * PI * 2.0
+    }
 }
 
 impl SolidBuilder {
+    /// Create a new solid mesh builder
     fn new() -> SolidBuilder {
         let builder = MeshBuilder::with_capacity(128);
         let points = vec![];
         SolidBuilder { builder, points }
     }
 
-    fn push_point(&mut self, angle: f32, ring: usize) {
+    /// Push one point
+    fn push_point(&mut self, angle: f32, ring_number: usize) {
         let vertex = self.builder.vertices();
         self.points.push(Point {
+            ring_number,
             angle,
-            ring,
             vertex,
         });
     }
 
+    /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
-        for (i, (near, far)) in ring.near.iter().zip(ring.far).enumerate() {
-            let angle = PI * 2.0 * i as f32 / ring.count as f32;
+        for (i, (near, far)) in
+            ring.near.iter().zip(ring.far.iter()).enumerate()
+        {
+            let angle = ring.angle(i);
             self.push_point(angle, ring.number);
             let dist = near;
             let x = dist * ring.radius * angle.sin();
@@ -116,10 +158,11 @@ impl SolidBuilder {
         }
     }
 
+    /// Make a band around the solid
     fn make_band(&mut self, ring0: usize, ring1: usize) {
         let mut points = VecDeque::new();
         for point in &self.points {
-            if point.ring == ring0 || point.ring == ring1 {
+            if point.ring_number == ring0 || point.ring_number == ring1 {
                 points.push_back(point);
             }
         }
@@ -131,13 +174,13 @@ impl SolidBuilder {
         let mut ivtx = ipt.vertex;
         let mut jvtx = jpt.vertex;
         assert!(ivtx != jvtx);
-        if jpt.ring > ipt.ring {
+        if jpt.ring_number > ipt.ring_number {
             (ivtx, jvtx) = (jvtx, ivtx);
         }
         let (avtx, bvtx) = (ivtx, jvtx);
         while let Some(pt) = points.pop_front() {
             self.builder.push_face(Face::new([ivtx, jvtx, pt.vertex]));
-            if pt.ring == ring1 {
+            if pt.ring_number == ring1 {
                 ivtx = pt.vertex;
             } else {
                 jvtx = pt.vertex;
@@ -150,6 +193,7 @@ impl SolidBuilder {
 }
 
 impl Config {
+    /// Build a mesh from the configuration
     pub fn build(self) -> Mesh {
         let mut solid = SolidBuilder::new();
         let mut ring = Ring::default();
