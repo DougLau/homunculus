@@ -71,52 +71,51 @@ struct SolidBuilder {
     points: Vec<Point>,
 }
 
+impl RingCfg {
+    /// Get point count
+    fn count(&self) -> Option<usize> {
+        self.count.or_else(|| {
+            let count = self.near.len().max(self.far.len());
+            if count > 0 {
+                Some(count)
+            } else {
+                None
+            }
+        })
+    }
+}
+
 impl Ring {
     /// Update ring from a configuration
-    fn with_config(&mut self, r: RingCfg) {
-        if let Some(scale) = r.scale {
+    fn with_config(&mut self, cfg: RingCfg) {
+        if let Some(scale) = cfg.scale {
             self.scale = scale;
         }
-        match r.count {
-            Some(count) => {
-                self.count = count;
-                self.near.clear();
-                self.far.clear();
-            }
-            None => {
-                if !r.near.is_empty() || !r.far.is_empty() {
-                    self.count = r.near.len().max(r.far.len());
-                }
-            }
-        }
-        let count = self.count;
-        if !r.near.is_empty() {
+        if let Some(count) = cfg.count() {
+            self.count = count;
             self.near.clear();
-            self.near.extend_from_slice(r.near.as_slice());
-        }
-        if !r.far.is_empty() {
+            self.near.extend_from_slice(cfg.near.as_slice());
             self.far.clear();
-            self.far.extend_from_slice(r.far.as_slice());
+            self.far.extend_from_slice(cfg.far.as_slice());
         }
-        for i in 0..count {
-            let near = self.near.get(i);
-            let far = self.far.get(i);
-            match (near, far) {
-                (Some(near), Some(far)) => {
-                    if near >= far {
-                        self.far[i] = *near;
-                    }
-                }
-                (Some(near), None) => self.far.push(*near),
-                (None, Some(far)) => self.near.push(*far),
-                _ => {
-                    self.near.push(1.0);
-                    self.far.push(1.0);
+    }
+
+    /// Get the near and far limits
+    fn near_far(&self, i: usize) -> (f32, f32) {
+        let near = self.near.get(i);
+        let far = self.far.get(i);
+        match (near, far) {
+            (Some(near), Some(far)) => {
+                if *near >= *far {
+                    (*near, *near)
+                } else {
+                    (*near, *far)
                 }
             }
+            (Some(near), None) => (*near, *near),
+            (None, Some(far)) => (*far, *far),
+            _ => (1.0, 1.0),
         }
-        self.near.resize(count, 1.0);
-        self.far.resize(count, 1.0);
     }
 
     /// Calculate the angle of a point
@@ -146,9 +145,8 @@ impl SolidBuilder {
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
-        for (i, (near, far)) in
-            ring.near.iter().zip(ring.far.iter()).enumerate()
-        {
+        for i in 0..ring.count {
+            let (near, _far) = ring.near_far(i);
             let angle = ring.angle(i);
             self.push_point(angle, ring.number);
             let dist = near * ring.scale;
@@ -198,8 +196,8 @@ impl Config {
         let mut solid = SolidBuilder::new();
         let mut ring = Ring::default();
         ring.scale = 1.0;
-        for r in self.ring {
-            ring.with_config(r);
+        for cfg in self.ring {
+            ring.with_config(cfg);
             solid.add_ring(ring.clone());
             if ring.number > 0 {
                 solid.make_band(ring.number - 1, ring.number);

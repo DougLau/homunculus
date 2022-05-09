@@ -3,7 +3,7 @@ ring:
   count: 6
 ring:
   scale: 1.0
-  near: 1 0.1 1 1 1 1
+  far: 1 0.1 1 1 1 1
 ring:
   count: 5
   scale: 0.8
