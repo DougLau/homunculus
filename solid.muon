@@ -1,17 +1,17 @@
 ring:
-  radius: 1.2
+  scale: 1.2
   count: 6
 ring:
-  radius: 1.0
+  scale: 1.0
   near: 1 0.1 1 1 1 1
 ring:
-  radius: 0.8
-ring:
   count: 5
-  radius: 0.75
+  scale: 0.8
+ring:
+  scale: 0.5
 ring:
   count: 4
-  radius: 0.2
+  scale: 0.2
 ring:
   count: 1
-  radius: 0.1
+  scale: 0.1

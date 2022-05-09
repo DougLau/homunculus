@@ -23,8 +23,8 @@ struct Ring {
     /// Ring number
     number: usize,
 
-    /// Radius of ring
-    radius: f32,
+    /// Scale factor
+    scale: f32,
 
     /// Count of points
     count: usize,
@@ -45,8 +45,8 @@ pub struct RingCfg {
     /// Ring name
     name: Option<String>,
 
-    /// Ring radius
-    radius: Option<f32>,
+    /// Scale factor
+    scale: Option<f32>,
 
     /// Count of points
     count: Option<usize>,
@@ -74,8 +74,8 @@ struct SolidBuilder {
 impl Ring {
     /// Update ring from a configuration
     fn with_config(&mut self, r: RingCfg) {
-        if let Some(radius) = r.radius {
-            self.radius = radius;
+        if let Some(scale) = r.scale {
+            self.scale = scale;
         }
         match r.count {
             Some(count) => {
@@ -151,9 +151,9 @@ impl SolidBuilder {
         {
             let angle = ring.angle(i);
             self.push_point(angle, ring.number);
-            let dist = near;
-            let x = dist * ring.radius * angle.sin();
-            let z = dist * ring.radius * angle.cos();
+            let dist = near * ring.scale;
+            let x = dist * angle.sin();
+            let z = dist * angle.cos();
             self.builder.push_vtx(Vec3([x, y, z]));
         }
     }
@@ -197,7 +197,7 @@ impl Config {
     pub fn build(self) -> Mesh {
         let mut solid = SolidBuilder::new();
         let mut ring = Ring::default();
-        ring.radius = 1.0;
+        ring.scale = 1.0;
         for r in self.ring {
             ring.with_config(r);
             solid.add_ring(ring.clone());
