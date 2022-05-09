@@ -7,11 +7,11 @@ use std::f32::consts::PI;
 /// A point on a solid surface
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 struct Point {
+    /// Ring angle (must be first for PartialOrd)
+    angle: f32,
+
     /// Ring number
     ring_number: usize,
-
-    /// Ring angle
-    angle: f32,
 
     /// Vertex number
     vertex: usize,
@@ -137,8 +137,8 @@ impl SolidBuilder {
     fn push_point(&mut self, angle: f32, ring_number: usize) {
         let vertex = self.builder.vertices();
         self.points.push(Point {
-            ring_number,
             angle,
+            ring_number,
             vertex,
         });
     }

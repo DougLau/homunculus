@@ -17,10 +17,10 @@ struct Args {
 
 fn main() {
     let args: Args = argh::from_env();
-    let muon = Path::new(&args.file);
-    let stem = muon.file_stem().unwrap();
-    let out = muon.with_file_name(Path::new(stem).with_extension("glb"));
-    let file = File::open(muon).unwrap();
+    let path = Path::new(&args.file);
+    let stem = path.file_stem().unwrap();
+    let out = path.with_file_name(Path::new(stem).with_extension("glb"));
+    let file = File::open(path).unwrap();
     let cfg: solid::Config = muon_rs::from_reader(file).unwrap();
     let mesh = cfg.build();
     gltf::export(&out, &mesh).unwrap();
