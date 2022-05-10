@@ -15,6 +15,7 @@ struct Args {
     file: String,
 }
 
+/// Main function
 fn main() {
     let args: Args = argh::from_env();
     let path = Path::new(&args.file);

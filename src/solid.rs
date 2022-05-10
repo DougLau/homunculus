@@ -67,22 +67,11 @@ pub struct Config {
 
 /// Solid mesh builder
 struct SolidBuilder {
+    /// Mesh builder
     builder: MeshBuilder,
-    points: Vec<Point>,
-}
 
-impl RingCfg {
-    /// Get point count
-    fn count(&self) -> Option<usize> {
-        self.count.or_else(|| {
-            let count = self.near.len().max(self.far.len());
-            if count > 0 {
-                Some(count)
-            } else {
-                None
-            }
-        })
-    }
+    /// All points on mesh
+    points: Vec<Point>,
 }
 
 impl Ring {
@@ -121,6 +110,20 @@ impl Ring {
     /// Calculate the angle of a point
     fn angle(&self, i: usize) -> f32 {
         i as f32 / self.count as f32 * PI * 2.0
+    }
+}
+
+impl RingCfg {
+    /// Get point count
+    fn count(&self) -> Option<usize> {
+        self.count.or_else(|| {
+            let count = self.near.len().max(self.far.len());
+            if count > 0 {
+                Some(count)
+            } else {
+                None
+            }
+        })
     }
 }
 

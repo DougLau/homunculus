@@ -1,6 +1,7 @@
 use crate::geom::Vec3;
 use crate::mesh::{Face, Mesh, MeshBuilder};
 
+/// Build a cube mesh
 pub fn build_cube() -> Mesh {
     let mut builder = MeshBuilder::with_capacity(16);
     builder.push_vtx(Vec3([-0.5, -0.5, 0.5])); // 0 left bottom front
