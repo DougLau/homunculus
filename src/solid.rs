@@ -26,9 +26,6 @@ struct Ring {
     /// Scale factor
     scale: f32,
 
-    /// Count of points
-    count: usize,
-
     /// Near point limits
     near: Vec<f32>,
 
@@ -48,14 +45,8 @@ pub struct RingCfg {
     /// Scale factor
     scale: Option<f32>,
 
-    /// Count of points
-    count: Option<usize>,
-
-    /// Near point limits
-    near: Vec<f32>,
-
-    /// Far point limits
-    far: Vec<f32>,
+    /// Point limits
+    points: Vec<String>,
 }
 
 /// Solid configuration
@@ -80,50 +71,69 @@ impl Ring {
         if let Some(scale) = cfg.scale {
             self.scale = scale;
         }
-        if let Some(count) = cfg.count() {
-            self.count = count;
-            self.near.clear();
-            self.near.extend_from_slice(cfg.near.as_slice());
-            self.far.clear();
-            self.far.extend_from_slice(cfg.far.as_slice());
-        }
-    }
-
-    /// Get the near and far limits
-    fn near_far(&self, i: usize) -> (f32, f32) {
-        let near = self.near.get(i);
-        let far = self.far.get(i);
-        match (near, far) {
-            (Some(near), Some(far)) => {
-                if *near >= *far {
-                    (*near, *near)
-                } else {
-                    (*near, *far)
-                }
-            }
-            (Some(near), None) => (*near, *near),
-            (None, Some(far)) => (*far, *far),
-            _ => (1.0, 1.0),
+        if !cfg.points.is_empty() {
+            (self.near, self.far) = cfg.near_far();
         }
     }
 
     /// Calculate the angle of a point
     fn angle(&self, i: usize) -> f32 {
-        i as f32 / self.count as f32 * PI * 2.0
+        let count = self.near.len() as f32;
+        i as f32 / count * PI * 2.0
     }
 }
 
-impl RingCfg {
-    /// Get point count
-    fn count(&self) -> Option<usize> {
-        self.count.or_else(|| {
-            let count = self.near.len().max(self.far.len());
-            if count > 0 {
-                Some(count)
-            } else {
-                None
+/// Parse a point count
+fn parse_count(code: &str) -> usize {
+    code.parse().expect("Invalid count")
+}
+
+/// Parse near/far point
+fn parse_near_far(code: &str) -> (f32, f32) {
+    let mut pts: Vec<f32> = code
+        .split("..")
+        .map(|p| p.parse::<f32>().expect("Invalid point"))
+        .collect();
+    let len = pts.len();
+    match len {
+        1 => pts.push(pts.last().copied().unwrap()),
+        2 => {
+            if pts[0] > pts[1] {
+                panic!("Near > far: {code}");
             }
-        })
+        }
+        _ => panic!("Invalid points: {code}"),
+    }
+    (pts[0], pts[1])
+}
+
+impl RingCfg {
+    /// Get near/far points
+    fn near_far(&self) -> (Vec<f32>, Vec<f32>) {
+        let mut near = vec![];
+        let mut far = vec![];
+        let mut repeat = false;
+        for code in &self.points {
+            if repeat {
+                let count = parse_count(code);
+                let ln = near.last().copied().unwrap_or(1.0);
+                let lf = far.last().copied().unwrap_or(1.0);
+                for _ in 1..count {
+                    near.push(ln);
+                    far.push(lf);
+                }
+                repeat = false;
+                continue;
+            }
+            if code == "*" {
+                repeat = true;
+                continue;
+            }
+            let (n, f) = parse_near_far(code);
+            near.push(n);
+            far.push(f);
+        }
+        (near, far)
     }
 }
 
@@ -148,8 +158,9 @@ impl SolidBuilder {
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
-        for i in 0..ring.count {
-            let (near, _far) = ring.near_far(i);
+        for (i, (near, far)) in
+            ring.near.iter().zip(ring.far.iter()).enumerate()
+        {
             let angle = ring.angle(i);
             self.push_point(angle, ring.number);
             let dist = near * ring.scale;
