@@ -8,6 +8,7 @@ ring:
   points: 1 1 b 1 1
 ring:
   scale: 0.7
+  points: 1 * 5
 ring:
 ring:
   scale: 0.5

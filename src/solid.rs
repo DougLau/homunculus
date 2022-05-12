@@ -17,6 +17,16 @@ struct Point {
     vertex: usize,
 }
 
+/// Point definition
+#[derive(Clone)]
+enum PtDef {
+    /// Point limits around axis
+    Limits(f32, f32),
+
+    /// Branch label
+    Branch(String),
+}
+
 /// Ring on surface of solid
 #[derive(Clone, Default)]
 struct Ring {
@@ -26,11 +36,8 @@ struct Ring {
     /// Scale factor
     scale: f32,
 
-    /// Near point limits
-    near: Vec<f32>,
-
-    /// Far point limits
-    far: Vec<f32>,
+    /// Point definitions
+    point_defs: Vec<PtDef>,
 
     /// Bone vector
     bone: Vec3,
@@ -72,13 +79,13 @@ impl Ring {
             self.scale = scale;
         }
         if !cfg.points.is_empty() {
-            (self.near, self.far) = cfg.near_far();
+            self.point_defs = cfg.point_defs();
         }
     }
 
     /// Calculate the angle of a point
     fn angle(&self, i: usize) -> f32 {
-        let count = self.near.len() as f32;
+        let count = self.point_defs.len() as f32;
         i as f32 / count * PI * 2.0
     }
 }
@@ -88,39 +95,41 @@ fn parse_count(code: &str) -> usize {
     code.parse().expect("Invalid count")
 }
 
-/// Parse near/far point
-fn parse_near_far(code: &str) -> (f32, f32) {
-    let mut pts: Vec<f32> = code
-        .split("..")
-        .map(|p| p.parse::<f32>().unwrap_or(1.0))
-        .collect();
-    let len = pts.len();
+/// Parse point definition
+fn parse_point_def(code: &str) -> PtDef {
+    let codes: Vec<&str> = code.split("..").collect();
+    let len = codes.len();
     match len {
-        1 => pts.push(pts.last().copied().unwrap()),
-        2 => {
-            if pts[0] > pts[1] {
-                panic!("Near > far: {code}");
+        1 => match code.parse::<f32>() {
+            Ok(pt) => PtDef::Limits(pt, pt),
+            Err(_) => PtDef::Branch(code.into()),
+        },
+        2 => match (codes[0].parse::<f32>(), codes[1].parse::<f32>()) {
+            (Ok(near), Ok(far)) => {
+                if near > far {
+                    panic!("Near > far: {code}");
+                } else {
+                    PtDef::Limits(near, far)
+                }
             }
-        }
+            _ => panic!("Invalid points: {code}"),
+        },
         _ => panic!("Invalid points: {code}"),
     }
-    (pts[0], pts[1])
 }
 
 impl RingCfg {
-    /// Get near/far points
-    fn near_far(&self) -> (Vec<f32>, Vec<f32>) {
-        let mut near = vec![];
-        let mut far = vec![];
+    /// Get point definitions
+    fn point_defs(&self) -> Vec<PtDef> {
+        let mut defs = vec![];
         let mut repeat = false;
         for code in &self.points {
             if repeat {
                 let count = parse_count(code);
-                let ln = near.last().copied().unwrap_or(1.0);
-                let lf = far.last().copied().unwrap_or(1.0);
+                let ptd =
+                    defs.last().cloned().unwrap_or(PtDef::Limits(1.0, 1.0));
                 for _ in 1..count {
-                    near.push(ln);
-                    far.push(lf);
+                    defs.push(ptd.clone());
                 }
                 repeat = false;
                 continue;
@@ -129,11 +138,9 @@ impl RingCfg {
                 repeat = true;
                 continue;
             }
-            let (n, f) = parse_near_far(code);
-            near.push(n);
-            far.push(f);
+            defs.push(parse_point_def(code));
         }
-        (near, far)
+        defs
     }
 }
 
@@ -158,15 +165,15 @@ impl SolidBuilder {
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
-        for (i, (near, far)) in
-            ring.near.iter().zip(ring.far.iter()).enumerate()
-        {
-            let angle = ring.angle(i);
-            self.push_point(angle, ring.number);
-            let dist = near * ring.scale;
-            let x = dist * angle.sin();
-            let z = dist * angle.cos();
-            self.builder.push_vtx(Vec3([x, y, z]));
+        for (i, ptd) in ring.point_defs.iter().enumerate() {
+            if let PtDef::Limits(near, _far) = ptd {
+                let angle = ring.angle(i);
+                self.push_point(angle, ring.number);
+                let dist = near * ring.scale;
+                let x = dist * angle.sin();
+                let z = dist * angle.cos();
+                self.builder.push_vtx(Vec3([x, y, z]));
+            }
         }
     }
 
@@ -178,8 +185,7 @@ impl SolidBuilder {
                 band.push_back(point);
             }
         }
-        band
-            .make_contiguous()
+        band.make_contiguous()
             .sort_by(|a, b| a.partial_cmp(b).unwrap());
         let ipt = band.pop_front().unwrap();
         let jpt = band.pop_front().unwrap();
