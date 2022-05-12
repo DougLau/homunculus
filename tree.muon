@@ -5,6 +5,7 @@ ring:
 ring:
   scale: 0.8
 ring:
+  points: 1 1 b 1 1
 ring:
   scale: 0.7
 ring:

@@ -92,7 +92,7 @@ fn parse_count(code: &str) -> usize {
 fn parse_near_far(code: &str) -> (f32, f32) {
     let mut pts: Vec<f32> = code
         .split("..")
-        .map(|p| p.parse::<f32>().expect("Invalid point"))
+        .map(|p| p.parse::<f32>().unwrap_or(1.0))
         .collect();
     let len = pts.len();
     match len {
@@ -172,17 +172,17 @@ impl SolidBuilder {
 
     /// Make a band around the solid
     fn make_band(&mut self, ring0: usize, ring1: usize) {
-        let mut points = VecDeque::new();
+        let mut band = VecDeque::new();
         for point in &self.points {
             if point.ring_number == ring0 || point.ring_number == ring1 {
-                points.push_back(point);
+                band.push_back(point);
             }
         }
-        points
+        band
             .make_contiguous()
             .sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let ipt = points.pop_front().unwrap();
-        let jpt = points.pop_front().unwrap();
+        let ipt = band.pop_front().unwrap();
+        let jpt = band.pop_front().unwrap();
         let mut ivtx = ipt.vertex;
         let mut jvtx = jpt.vertex;
         assert!(ivtx != jvtx);
@@ -190,7 +190,7 @@ impl SolidBuilder {
             (ivtx, jvtx) = (jvtx, ivtx);
         }
         let (avtx, bvtx) = (ivtx, jvtx);
-        while let Some(pt) = points.pop_front() {
+        while let Some(pt) = band.pop_front() {
             self.builder.push_face(Face::new([ivtx, jvtx, pt.vertex]));
             if pt.ring_number == ring1 {
                 ivtx = pt.vertex;
