@@ -3,6 +3,7 @@ use crate::mesh::{Face, Mesh, MeshBuilder};
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
+use std::str::FromStr;
 
 /// A point on a solid surface
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -95,26 +96,29 @@ fn parse_count(code: &str) -> usize {
     code.parse().expect("Invalid count")
 }
 
-/// Parse point definition
-fn parse_point_def(code: &str) -> PtDef {
-    let codes: Vec<&str> = code.split("..").collect();
-    let len = codes.len();
-    match len {
-        1 => match code.parse::<f32>() {
-            Ok(pt) => PtDef::Limits(pt, pt),
-            Err(_) => PtDef::Branch(code.into()),
-        },
-        2 => match (codes[0].parse::<f32>(), codes[1].parse::<f32>()) {
-            (Ok(near), Ok(far)) => {
-                if near > far {
-                    panic!("Near > far: {code}");
-                } else {
-                    PtDef::Limits(near, far)
+impl FromStr for PtDef {
+    type Err = &'static str;
+
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        let codes: Vec<&str> = code.split("..").collect();
+        let len = codes.len();
+        match len {
+            1 => match code.parse::<f32>() {
+                Ok(pt) => Ok(PtDef::Limits(pt, pt)),
+                Err(_) => Ok(PtDef::Branch(code.into())),
+            },
+            2 => match (codes[0].parse::<f32>(), codes[1].parse::<f32>()) {
+                (Ok(near), Ok(far)) => {
+                    if near > far {
+                        Err("Near > far: {code}")
+                    } else {
+                        Ok(PtDef::Limits(near, far))
+                    }
                 }
-            }
-            _ => panic!("Invalid points: {code}"),
-        },
-        _ => panic!("Invalid points: {code}"),
+                _ => Err("Invalid points: {code}"),
+            },
+            _ => Err("Invalid points: {code}"),
+        }
     }
 }
 
@@ -138,7 +142,7 @@ impl RingCfg {
                 repeat = true;
                 continue;
             }
-            defs.push(parse_point_def(code));
+            defs.push(code.parse().unwrap());
         }
         defs
     }
