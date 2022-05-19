@@ -15,7 +15,7 @@ struct Point {
     ring_number: usize,
 
     /// Vertex number
-    vertex: usize,
+    vertex: Option<usize>,
 }
 
 /// Point definition
@@ -158,7 +158,7 @@ impl SolidBuilder {
 
     /// Push one point
     fn push_point(&mut self, angle: f32, ring_number: usize) {
-        let vertex = self.builder.vertices();
+        let vertex = Some(self.builder.vertices());
         self.points.push(Point {
             angle,
             ring_number,
@@ -166,17 +166,29 @@ impl SolidBuilder {
         });
     }
 
+    /// Push one hole
+    fn push_hole(&mut self, angle: f32, ring_number: usize) {
+        self.points.push(Point {
+            angle,
+            ring_number,
+            vertex: None,
+        });
+    }
+
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
         let y = ring.number as f32;
         for (i, ptd) in ring.point_defs.iter().enumerate() {
-            if let PtDef::Limits(near, _far) = ptd {
-                let angle = ring.angle(i);
-                self.push_point(angle, ring.number);
-                let dist = near * ring.scale;
-                let x = dist * angle.sin();
-                let z = dist * angle.cos();
-                self.builder.push_vtx(Vec3([x, y, z]));
+            let angle = ring.angle(i);
+            match ptd {
+                PtDef::Limits(near, _far) => {
+                    self.push_point(angle, ring.number);
+                    let dist = near * ring.scale;
+                    let x = dist * angle.sin();
+                    let z = dist * angle.cos();
+                    self.builder.push_vtx(Vec3([x, y, z]));
+                }
+                PtDef::Branch(_) => self.push_hole(angle, ring.number),
             }
         }
     }
@@ -201,7 +213,9 @@ impl SolidBuilder {
         }
         let (avtx, bvtx) = (ivtx, jvtx);
         while let Some(pt) = band.pop_front() {
-            self.builder.push_face(Face::new([ivtx, jvtx, pt.vertex]));
+            if let (Some(i), Some(j), Some(p)) = (ivtx, jvtx, pt.vertex) {
+                self.builder.push_face(Face::new([i, j, p]));
+            }
             if pt.ring_number == ring1 {
                 ivtx = pt.vertex;
             } else {
@@ -209,8 +223,12 @@ impl SolidBuilder {
             }
         }
         // Connect with first vertices
-        self.builder.push_face(Face::new([ivtx, jvtx, bvtx]));
-        self.builder.push_face(Face::new([bvtx, avtx, ivtx]));
+        if let (Some(i), Some(j), Some(b)) = (ivtx, jvtx, bvtx) {
+            self.builder.push_face(Face::new([i, j, b]));
+        }
+        if let (Some(b), Some(a), Some(i)) = (bvtx, avtx, ivtx) {
+            self.builder.push_face(Face::new([b, a, i]));
+        }
     }
 }
 
