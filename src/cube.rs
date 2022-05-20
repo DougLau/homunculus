@@ -1,17 +1,17 @@
-use crate::geom::Vec3;
 use crate::mesh::{Face, Mesh, MeshBuilder};
+use glam::Vec3;
 
 /// Build a cube mesh
 pub fn build_cube() -> Mesh {
     let mut builder = MeshBuilder::with_capacity(16);
-    builder.push_vtx(Vec3([-0.5, -0.5, 0.5])); // 0 left bottom front
-    builder.push_vtx(Vec3([-0.5, 0.5, 0.5])); // 1 left top front
-    builder.push_vtx(Vec3([0.5, -0.5, 0.5])); // 2 right bottom front
-    builder.push_vtx(Vec3([0.5, 0.5, 0.5])); // 3 right top front
-    builder.push_vtx(Vec3([-0.5, -0.5, -0.5])); // 4 left bottom back
-    builder.push_vtx(Vec3([-0.5, 0.5, -0.5])); // 5 left top back
-    builder.push_vtx(Vec3([0.5, -0.5, -0.5])); // 6 right bottom back
-    builder.push_vtx(Vec3([0.5, 0.5, -0.5])); // 7 right top back
+    builder.push_vtx(Vec3::new(-0.5, -0.5, 0.5)); // 0 left bottom front
+    builder.push_vtx(Vec3::new(-0.5, 0.5, 0.5)); // 1 left top front
+    builder.push_vtx(Vec3::new(0.5, -0.5, 0.5)); // 2 right bottom front
+    builder.push_vtx(Vec3::new(0.5, 0.5, 0.5)); // 3 right top front
+    builder.push_vtx(Vec3::new(-0.5, -0.5, -0.5)); // 4 left bottom back
+    builder.push_vtx(Vec3::new(-0.5, 0.5, -0.5)); // 5 left top back
+    builder.push_vtx(Vec3::new(0.5, -0.5, -0.5)); // 6 right bottom back
+    builder.push_vtx(Vec3::new(0.5, 0.5, -0.5)); // 7 right top back
 
     // front
     builder.push_face(Face::new([0, 3, 1]).with_flat());

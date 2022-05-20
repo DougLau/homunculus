@@ -1,5 +1,5 @@
-use crate::geom::Vec3;
 use crate::mesh::{Face, Mesh, MeshBuilder};
+use glam::Vec3;
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
@@ -186,7 +186,7 @@ impl SolidBuilder {
                     let dist = near * ring.scale;
                     let x = dist * angle.sin();
                     let z = dist * angle.cos();
-                    self.builder.push_vtx(Vec3([x, y, z]));
+                    self.builder.push_vtx(Vec3::new(x, y, z));
                 }
                 PtDef::Branch(_) => self.push_hole(angle, ring.number),
             }

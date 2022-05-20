@@ -1,5 +1,4 @@
 pub mod cube;
-pub mod geom;
 pub mod gltf;
 pub mod mesh;
 pub mod solid;

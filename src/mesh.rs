@@ -1,4 +1,4 @@
-use crate::geom::Vec3;
+use glam::Vec3;
 
 /// Vertex index
 #[repr(transparent)]
@@ -164,11 +164,11 @@ impl MeshBuilder {
             let vtx = [face.vtx[0], face.vtx[1], face.vtx[2]];
             let pos = [self.pos[vtx[0]], self.pos[vtx[1]], self.pos[vtx[2]]];
             let trin = (pos[0] - pos[1]).cross(pos[0] - pos[2]).normalize();
-            let a0 = (pos[1] - pos[0]).angle(pos[2] - pos[0]);
+            let a0 = (pos[1] - pos[0]).angle_between(pos[2] - pos[0]);
             norm[vtx[0]] += trin * a0;
-            let a1 = (pos[2] - pos[1]).angle(pos[0] - pos[1]);
+            let a1 = (pos[2] - pos[1]).angle_between(pos[0] - pos[1]);
             norm[vtx[1]] += trin * a1;
-            let a2 = (pos[0] - pos[2]).angle(pos[1] - pos[2]);
+            let a2 = (pos[0] - pos[2]).angle_between(pos[1] - pos[2]);
             norm[vtx[2]] += trin * a2;
         }
         norm.iter().map(|n| n.normalize()).collect()
