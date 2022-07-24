@@ -1,6 +1,11 @@
 [package]
 name = "homunculus"
 version = "0.1.0"
+description = "Experimental 3D modeling library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DougLau/homunculus/homunculus"
+readme = "README.md"
+keywords = ["3D", "modeling", "gltf"]
 edition = "2021"
 
 [dependencies]
