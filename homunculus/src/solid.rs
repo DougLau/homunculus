@@ -74,6 +74,15 @@ struct SolidBuilder {
 }
 
 impl Ring {
+    fn new() -> Self {
+        Ring {
+            number: 0,
+            scale: 1.0,
+            point_defs: vec![],
+            bone: Vec3::new(0.0, 1.0, 0.0),
+        }
+    }
+
     /// Update ring from a configuration
     fn with_config(&mut self, cfg: RingCfg) {
         if let Some(scale) = cfg.scale {
@@ -177,12 +186,14 @@ impl SolidBuilder {
 
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
+        // FIXME: use bone vector here
         let y = ring.number as f32;
         for (i, ptd) in ring.point_defs.iter().enumerate() {
             let angle = ring.angle(i);
             match ptd {
                 PtDef::Limits(near, _far) => {
                     self.push_point(angle, ring.number);
+                    // FIXME: should be angle around bone vector
                     let dist = near * ring.scale;
                     let x = dist * angle.sin();
                     let z = dist * angle.cos();
@@ -236,8 +247,7 @@ impl Config {
     /// Build a mesh from the configuration
     pub fn build(self) -> Mesh {
         let mut solid = SolidBuilder::new();
-        let mut ring = Ring::default();
-        ring.scale = 1.0;
+        let mut ring = Ring::new();
         for cfg in self.ring {
             ring.with_config(cfg);
             solid.add_ring(ring.clone());

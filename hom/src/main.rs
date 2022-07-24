@@ -1,9 +1,6 @@
-pub mod cube;
-pub mod gltf;
-pub mod mesh;
-pub mod solid;
-
 use argh::FromArgs;
+use homunculus::gltf;
+use homunculus::solid;
 use std::fs::File;
 use std::path::Path;
 
