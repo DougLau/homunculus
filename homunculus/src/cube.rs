@@ -1,4 +1,8 @@
 use crate::mesh::{Face, Mesh, MeshBuilder};
+// cube.rs      Cube module
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use glam::Vec3;
 
 /// Build a cube mesh

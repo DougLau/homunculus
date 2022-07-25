@@ -1,3 +1,7 @@
+// gltf.rs      glTF module
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use crate::mesh::Mesh;
 use serde_json::{json, Value};
 use serde_repr::Serialize_repr;

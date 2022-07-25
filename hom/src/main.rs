@@ -1,6 +1,9 @@
+// main.rs      hom program
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use argh::FromArgs;
-use homunculus::gltf;
-use homunculus::solid;
+use homunculus::{gltf, solid};
 use std::fs::File;
 use std::path::Path;
 

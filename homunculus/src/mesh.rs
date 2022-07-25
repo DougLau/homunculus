@@ -1,3 +1,7 @@
+// mesh.rs      Mesh module
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use glam::Vec3;
 
 /// Vertex index

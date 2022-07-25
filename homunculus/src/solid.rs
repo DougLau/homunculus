@@ -1,3 +1,7 @@
+// solid.rs     Solid module
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use crate::mesh::{Face, Mesh, MeshBuilder};
 use glam::Vec3;
 use serde_derive::Deserialize;
