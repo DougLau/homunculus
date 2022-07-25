@@ -164,7 +164,7 @@ impl RingCfg {
 impl SolidBuilder {
     /// Create a new solid mesh builder
     fn new() -> SolidBuilder {
-        let builder = MeshBuilder::with_capacity(128);
+        let builder = Mesh::builder();
         let points = vec![];
         SolidBuilder { builder, points }
     }

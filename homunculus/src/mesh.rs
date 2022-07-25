@@ -84,6 +84,13 @@ impl Face {
 }
 
 impl MeshBuilder {
+    /// Create a new mesh builder
+    fn new() -> Self {
+        let pos = vec![];
+        let faces = vec![];
+        MeshBuilder { pos, faces }
+    }
+
     /// Create a mesh builder with capacity for N faces
     pub fn with_capacity(n_faces: usize) -> Self {
         let pos = Vec::with_capacity(n_faces * 3);
@@ -191,6 +198,11 @@ impl MeshBuilder {
 }
 
 impl Mesh {
+    /// Create a new mesh builder
+    pub fn builder() -> MeshBuilder {
+        MeshBuilder::new()
+    }
+
     /// Create a new mesh
     fn new(builder: MeshBuilder) -> Self {
         let norm = builder.build_normals();

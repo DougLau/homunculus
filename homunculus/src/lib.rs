@@ -4,5 +4,5 @@
 //
 pub mod cube;
 pub mod gltf;
-pub mod mesh;
+mod mesh;
 pub mod solid;

@@ -1,13 +1,13 @@
-use crate::mesh::{Face, Mesh, MeshBuilder};
 // cube.rs      Cube module
 //
 // Copyright (c) 2022  Douglas Lau
 //
+use crate::mesh::{Face, Mesh};
 use glam::Vec3;
 
 /// Build a cube mesh
 pub fn build_cube() -> Mesh {
-    let mut builder = MeshBuilder::with_capacity(16);
+    let mut builder = Mesh::builder();
     builder.push_vtx(Vec3::new(-0.5, -0.5, 0.5)); // 0 left bottom front
     builder.push_vtx(Vec3::new(-0.5, 0.5, 0.5)); // 1 left top front
     builder.push_vtx(Vec3::new(0.5, -0.5, 0.5)); // 2 right bottom front
