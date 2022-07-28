@@ -1,15 +1,17 @@
-// solid.rs     Solid module
+// model.rs     Model module
 //
 // Copyright (c) 2022  Douglas Lau
 //
 use crate::mesh::{Face, Mesh, MeshBuilder};
+use crate::gltf;
 use glam::Vec3;
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
+use std::io::Write;
 use std::str::FromStr;
 
-/// A point on a solid surface
+/// A point on a model surface
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 struct Point {
     /// Ring angle (must be first for PartialOrd)
@@ -32,7 +34,7 @@ enum PtDef {
     Branch(String),
 }
 
-/// Ring on surface of solid
+/// Ring on surface of model
 #[derive(Clone, Default)]
 struct Ring {
     /// Ring number
@@ -61,15 +63,15 @@ pub struct RingCfg {
     points: Vec<String>,
 }
 
-/// Solid configuration
+/// Model configuration
 #[derive(Deserialize)]
-pub struct Config {
+pub struct Model {
     /// Vec of all rings
     ring: Vec<RingCfg>,
 }
 
-/// Solid mesh builder
-struct SolidBuilder {
+/// Model mesh builder
+struct ModelBuilder {
     /// Mesh builder
     builder: MeshBuilder,
 
@@ -88,7 +90,7 @@ impl Ring {
     }
 
     /// Update ring from a configuration
-    fn with_config(&mut self, cfg: RingCfg) {
+    fn with_config(&mut self, cfg: &RingCfg) {
         if let Some(scale) = cfg.scale {
             self.scale = scale;
         }
@@ -112,7 +114,7 @@ fn parse_count(code: &str) -> usize {
 impl FromStr for PtDef {
     type Err = &'static str;
 
-    fn from_str(code: &str) -> Result<Self, Self::Err> {
+    fn from_str(code: &str) -> std::result::Result<Self, Self::Err> {
         let codes: Vec<&str> = code.split("..").collect();
         let len = codes.len();
         match len {
@@ -161,12 +163,12 @@ impl RingCfg {
     }
 }
 
-impl SolidBuilder {
-    /// Create a new solid mesh builder
-    fn new() -> SolidBuilder {
+impl ModelBuilder {
+    /// Create a new model mesh builder
+    fn new() -> ModelBuilder {
         let builder = Mesh::builder();
         let points = vec![];
-        SolidBuilder { builder, points }
+        ModelBuilder { builder, points }
     }
 
     /// Push one point
@@ -208,7 +210,7 @@ impl SolidBuilder {
         }
     }
 
-    /// Make a band around the solid
+    /// Make a band around the model
     fn make_band(&mut self, ring0: usize, ring1: usize) {
         let mut band = VecDeque::new();
         for point in &self.points {
@@ -247,19 +249,25 @@ impl SolidBuilder {
     }
 }
 
-impl Config {
+impl Model {
+    /// Write model as glTF
+    pub fn write_gltf<W: Write>(&self, writer: W) -> std::io::Result<()> {
+        let mesh = self.build();
+        Ok(gltf::export(writer, &mesh)?)
+    }
+
     /// Build a mesh from the configuration
-    pub fn build(self) -> Mesh {
-        let mut solid = SolidBuilder::new();
+    fn build(&self) -> Mesh {
+        let mut model = ModelBuilder::new();
         let mut ring = Ring::new();
-        for cfg in self.ring {
-            ring.with_config(cfg);
-            solid.add_ring(ring.clone());
+        for cfg in &self.ring {
+            ring.with_config(&cfg);
+            model.add_ring(ring.clone());
             if ring.number > 0 {
-                solid.make_band(ring.number - 1, ring.number);
+                model.make_band(ring.number - 1, ring.number);
             }
             ring.number += 1;
         }
-        solid.builder.build()
+        model.builder.build()
     }
 }

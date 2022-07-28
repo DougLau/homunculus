@@ -5,7 +5,6 @@
 use crate::mesh::Mesh;
 use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
-use std::fs::File;
 use std::io::{Result, Write};
 use std::mem::size_of;
 
