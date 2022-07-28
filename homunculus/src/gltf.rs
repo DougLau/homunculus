@@ -6,9 +6,8 @@ use crate::mesh::Mesh;
 use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Result, Write};
 use std::mem::size_of;
-use std::path::Path;
 
 /// Component types for glTF accessor
 #[derive(Serialize_repr)]
@@ -39,9 +38,9 @@ struct Builder {
     meshes: Vec<Value>,
 }
 
-/// GLB file writer
-struct Glb {
-    writer: File,
+/// GLB writer
+struct Glb<W: Write> {
+    writer: W,
 }
 
 /// Transmute a slice of `T` to a slice of `u8`
@@ -156,11 +155,8 @@ impl Builder {
     }
 }
 
-/// Export a mesh to a GLB file
-pub fn export<P: AsRef<Path>>(
-    path: P,
-    mesh: &Mesh,
-) -> Result<(), std::io::Error> {
+/// Export a mesh to a writer as a GLB
+pub fn export<W: Write>(writer: W, mesh: &Mesh) -> Result<()> {
     let mut builder = Builder::new();
     builder.add_mesh(mesh);
     let bin = builder.bin();
@@ -168,26 +164,21 @@ pub fn export<P: AsRef<Path>>(
     while root_json.len() % 4 != 0 {
         root_json.push(' ');
     }
-    let mut glb = Glb::create(path)?;
+    let mut glb = Glb::new(writer);
     glb.write_header(2, (root_json.len() + bin.len()).try_into().unwrap())?;
     glb.write_json(&root_json)?;
     glb.write_bin(bin)?;
     Ok(())
 }
 
-impl Glb {
-    /// Create GLB file
-    fn create<P: AsRef<Path>>(path: P) -> Result<Glb, std::io::Error> {
-        let writer = File::create(path.as_ref())?;
-        Ok(Glb { writer })
+impl<W: Write> Glb<W> {
+    /// Create new GLB writer
+    fn new(writer: W) -> Self {
+        Glb { writer }
     }
 
-    /// Write file header
-    fn write_header(
-        &mut self,
-        chunks: u32,
-        len: u32,
-    ) -> Result<(), std::io::Error> {
+    /// Write GLB header
+    fn write_header(&mut self, chunks: u32, len: u32) -> Result<()> {
         let total_len = 12 + chunks * 8 + len;
         self.writer.write_all(b"glTF")?;
         self.writer.write_all(&2u32.to_le_bytes())?;
@@ -196,11 +187,7 @@ impl Glb {
     }
 
     /// Write one chunk
-    fn write_chunk(
-        &mut self,
-        ctype: &[u8],
-        data: &[u8],
-    ) -> Result<(), std::io::Error> {
+    fn write_chunk(&mut self, ctype: &[u8], data: &[u8]) -> Result<()> {
         let len: u32 = data.len().try_into().unwrap();
         self.writer.write_all(&len.to_le_bytes())?;
         self.writer.write_all(ctype)?;
@@ -209,12 +196,12 @@ impl Glb {
     }
 
     /// Write a JSON chunk
-    fn write_json(&mut self, json: &str) -> Result<(), std::io::Error> {
+    fn write_json(&mut self, json: &str) -> Result<()> {
         self.write_chunk(b"JSON", json.as_bytes())
     }
 
     /// Write a BIN chunk
-    fn write_bin(&mut self, bin: &[u8]) -> Result<(), std::io::Error> {
+    fn write_bin(&mut self, bin: &[u8]) -> Result<()> {
         self.write_chunk(b"BIN\0", bin)
     }
 }

@@ -20,8 +20,9 @@ fn main() {
     let path = Path::new(&args.file);
     let stem = path.file_stem().unwrap();
     let out = path.with_file_name(Path::new(stem).with_extension("glb"));
+    let writer = File::create(out).unwrap();
     let file = File::open(path).unwrap();
     let cfg: solid::Config = muon_rs::from_reader(file).unwrap();
     let mesh = cfg.build();
-    gltf::export(&out, &mesh).unwrap();
+    gltf::export(&writer, &mesh).unwrap();
 }
