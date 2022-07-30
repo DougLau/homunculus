@@ -1,5 +1,6 @@
 [workspace]
 members = ["homunculus", "hom"]
+resolver = "2"
 
 [patch.crates-io]
 homunculus = { path = "./homunculus" }

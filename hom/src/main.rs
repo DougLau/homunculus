@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2022  Douglas Lau
 //
+mod view;
+
 use anyhow::{Context, Result};
 use argh::FromArgs;
 use homunculus::Model;
@@ -24,9 +26,10 @@ struct Args {
 /// Main function
 fn main() -> Result<()> {
     let args: Args = argh::from_env();
-    let _path = args.build_model()?;
+    let path = args.build_model()?;
     if args.view {
-        // TODO: view model
+        let folder = std::env::current_dir().unwrap().display().to_string();
+        view::view_gltf(folder, path);
     }
     Ok(())
 }
