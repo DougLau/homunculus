@@ -2,8 +2,8 @@
 //
 // Copyright (c) 2022  Douglas Lau
 //
-use crate::mesh::{Face, Mesh, MeshBuilder};
 use crate::gltf;
+use crate::mesh::{Face, Mesh, MeshBuilder};
 use glam::Vec3;
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
@@ -53,14 +53,17 @@ struct Ring {
 /// Ring configuration
 #[derive(Deserialize)]
 pub struct RingCfg {
-    /// Ring name
-    name: Option<String>,
+    /// Ring label
+    label: Option<String>,
 
     /// Scale factor
     scale: Option<f32>,
 
     /// Point limits
     points: Vec<String>,
+
+    /// Bone vector
+    bone: Option<String>,
 }
 
 /// Model configuration
@@ -97,6 +100,9 @@ impl Ring {
         if !cfg.points.is_empty() {
             self.point_defs = cfg.point_defs();
         }
+        if let Some(bone) = &cfg.bone {
+            self.bone = parse_bone(bone);
+        }
     }
 
     /// Calculate the angle of a point
@@ -111,10 +117,25 @@ fn parse_count(code: &str) -> usize {
     code.parse().expect("Invalid count")
 }
 
+/// Parse a bone vector
+fn parse_bone(bone: &str) -> Vec3 {
+    let xyz: Vec<_> = bone.split(" ").collect();
+    if xyz.len() == 3 {
+        if let (Ok(x), Ok(y), Ok(z)) = (
+            xyz[0].parse::<f32>(),
+            xyz[1].parse::<f32>(),
+            xyz[2].parse::<f32>(),
+        ) {
+            return Vec3::new(x, y, z);
+        }
+    }
+    panic!("Invalid bone: {bone}");
+}
+
 impl FromStr for PtDef {
     type Err = &'static str;
 
-    fn from_str(code: &str) -> std::result::Result<Self, Self::Err> {
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
         let codes: Vec<&str> = code.split("..").collect();
         let len = codes.len();
         match len {
