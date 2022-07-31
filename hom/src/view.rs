@@ -1,3 +1,7 @@
+// view.rs      View module
+//
+// Copyright (c) 2022  Douglas Lau
+//
 use bevy::{
     asset::{AssetServerSettings, LoadState},
     gltf::Gltf,
@@ -10,10 +14,12 @@ use bevy::{
 use std::f32::consts::PI;
 use std::path::PathBuf;
 
+/// Path configuration resource for glTF
 struct PathConfig {
     path: PathBuf,
 }
 
+/// Scene state
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum SceneState {
     Loading,
@@ -23,6 +29,7 @@ enum SceneState {
     Started,
 }
 
+/// Scene resource data
 struct SceneRes {
     handle: Handle<Gltf>,
     id: Option<InstanceId>,
@@ -30,6 +37,7 @@ struct SceneRes {
     state: SceneState,
 }
 
+/// Camera controller component
 #[derive(Component)]
 struct CameraController {
     focus: Vec3,
@@ -37,6 +45,7 @@ struct CameraController {
 }
 
 impl CameraController {
+    /// Create a new camera controller
     fn new(pos: Vec3, focus: Vec3) -> Self {
         CameraController {
             focus,
@@ -44,12 +53,14 @@ impl CameraController {
         }
     }
 
+    /// Update camera transform
     fn update_transform(&self, transform: &mut Transform) {
         let rot = Mat3::from_quat(transform.rotation);
         transform.translation =
             self.focus + rot.mul_vec3(Vec3::new(0.0, 0.0, self.radius));
     }
 
+    /// Pan camera
     fn pan(&mut self, transform: &mut Transform, motion: Vec2, win_sz: Vec2) {
         let proj = PerspectiveProjection::default(); // FIXME
         let pan =
@@ -61,6 +72,7 @@ impl CameraController {
         self.update_transform(transform);
     }
 
+    /// Rotate camera
     fn rotate(
         &mut self,
         transform: &mut Transform,
@@ -75,6 +87,7 @@ impl CameraController {
         self.update_transform(transform);
     }
 
+    /// Zoom camera in or out
     fn zoom(&mut self, transform: &mut Transform, motion: f32) {
         self.radius -= motion * self.radius * 0.2;
         self.radius = self.radius.max(0.1);
@@ -82,6 +95,7 @@ impl CameraController {
     }
 }
 
+/// View glTF in an app window
 pub fn view_gltf(folder: String, path: PathBuf) {
     let mut app = App::new();
     app.insert_resource(WindowDescriptor {
@@ -99,7 +113,7 @@ pub fn view_gltf(folder: String, path: PathBuf) {
     })
     .add_plugins(DefaultPlugins)
     .add_startup_system(start_loading)
-    .add_system(check_loaded)
+    .add_system(spawn_scene)
     .add_system(check_ready)
     .add_system(setup_camera_and_light)
     .add_system(start_animation)
@@ -109,6 +123,7 @@ pub fn view_gltf(folder: String, path: PathBuf) {
     .run();
 }
 
+/// System to start loading scene
 fn start_loading(
     mut commands: Commands,
     config: Res<PathConfig>,
@@ -122,7 +137,8 @@ fn start_loading(
     });
 }
 
-fn check_loaded(
+/// System to spawn the scene
+fn spawn_scene(
     mut scene_res: ResMut<SceneRes>,
     asset_svr: Res<AssetServer>,
     gltf_assets: ResMut<Assets<Gltf>>,
@@ -141,6 +157,7 @@ fn check_loaded(
     }
 }
 
+/// System to check whether scene is ready (after spawning)
 fn check_ready(mut scene_res: ResMut<SceneRes>, spawner: Res<SceneSpawner>) {
     if scene_res.state != SceneState::Spawning {
         return;
@@ -151,6 +168,7 @@ fn check_ready(mut scene_res: ResMut<SceneRes>, spawner: Res<SceneSpawner>) {
     }
 }
 
+/// System to setup camera and light
 fn setup_camera_and_light(
     mut scene_res: ResMut<SceneRes>,
     mut commands: Commands,
@@ -163,7 +181,7 @@ fn setup_camera_and_light(
     }
     scene_res.state = SceneState::Setup;
     let aabb = bounding_box_meshes(query);
-    let (bundle, controller) = bundle_controller(aabb.clone());
+    let (bundle, controller) = build_camera(aabb.clone());
     commands.spawn_bundle(bundle).insert(controller);
     let min = aabb.min();
     let max = aabb.max();
@@ -216,7 +234,8 @@ fn bounding_box_meshes(
     })
 }
 
-fn bundle_controller(aabb: Aabb) -> (Camera3dBundle, CameraController) {
+/// Build camera bundle and controller
+fn build_camera(aabb: Aabb) -> (Camera3dBundle, CameraController) {
     let look = Vec3::from(aabb.center);
     let pos = Vec3::from(aabb.center + aabb.half_extents * 0.6);
     let bundle = Camera3dBundle {
@@ -227,6 +246,7 @@ fn bundle_controller(aabb: Aabb) -> (Camera3dBundle, CameraController) {
     (bundle, controller)
 }
 
+/// System to start the animation player
 fn start_animation(
     mut scene_res: ResMut<SceneRes>,
     mut players: Query<&mut AnimationPlayer>,
@@ -242,9 +262,9 @@ fn start_animation(
     }
 }
 
+/// System to control animations
 fn control_animation(
     scene_res: Res<SceneRes>,
-    keyboard: Res<Input<KeyCode>>,
     mouse: Res<Input<MouseButton>>,
     mut players: Query<&mut AnimationPlayer>,
     mut animation_idx: Local<usize>,
@@ -264,21 +284,15 @@ fn control_animation(
             .repeat();
         *is_changing = false;
     }
-    if keyboard.just_pressed(KeyCode::Space) {
-        if player.is_paused() {
-            player.resume();
-        } else {
-            player.pause();
-        }
-    }
 }
 
+/// System to update the camera
 fn update_camera(
     windows: Res<Windows>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     mouse: Res<Input<MouseButton>>,
-    input: Res<Input<KeyCode>>,
+    keyboard: Res<Input<KeyCode>>,
     mut query: Query<(&mut CameraController, &mut Transform)>,
 ) {
     let (mut controller, mut transform) = match query.get_single_mut() {
@@ -286,8 +300,6 @@ fn update_camera(
         Err(_) => return,
     };
 
-    let shift =
-        input.pressed(KeyCode::LShift) || input.pressed(KeyCode::RShift);
     if mouse.pressed(MouseButton::Middle) {
         let mut motion = Vec2::ZERO;
         for ev in ev_motion.iter() {
@@ -295,7 +307,9 @@ fn update_camera(
         }
         if motion.length_squared() > 0.0 {
             let win_sz = primary_window_size(&windows);
-            if shift {
+            if keyboard.pressed(KeyCode::LShift)
+                || keyboard.pressed(KeyCode::RShift)
+            {
                 controller.pan(&mut transform, motion, win_sz);
             } else {
                 controller.rotate(&mut transform, motion, win_sz);
@@ -312,11 +326,13 @@ fn update_camera(
     }
 }
 
+/// Get the size of the primary window
 fn primary_window_size(windows: &Res<Windows>) -> Vec2 {
     let window = windows.get_primary().unwrap();
     Vec2::new(window.width() as f32, window.height() as f32)
 }
 
+/// System to update the directional light
 fn update_light_direction(
     mouse: Res<Input<MouseButton>>,
     mut queries: ParamSet<(
