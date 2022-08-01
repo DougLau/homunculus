@@ -4,7 +4,7 @@
 //
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder};
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use serde_derive::Deserialize;
 use std::collections::VecDeque;
 use std::f32::consts::PI;
@@ -39,6 +39,9 @@ enum PtDef {
 struct Ring {
     /// Ring number
     number: usize,
+
+    /// Center point
+    center: Vec3,
 
     /// Scale factor
     scale: f32,
@@ -86,6 +89,7 @@ impl Ring {
     fn new() -> Self {
         Ring {
             number: 0,
+            center: Vec3::new(0.0, 0.0, 0.0),
             scale: 1.0,
             point_defs: vec![],
             bone: Vec3::new(0.0, 1.0, 0.0),
@@ -100,8 +104,8 @@ impl Ring {
         if !cfg.points.is_empty() {
             self.point_defs = cfg.point_defs();
         }
-        if let Some(bone) = &cfg.bone {
-            self.bone = parse_bone(bone);
+        if let Some(bone) = cfg.parse_bone() {
+            self.bone = bone;
         }
     }
 
@@ -115,21 +119,6 @@ impl Ring {
 /// Parse a point count
 fn parse_count(code: &str) -> usize {
     code.parse().expect("Invalid count")
-}
-
-/// Parse a bone vector
-fn parse_bone(bone: &str) -> Vec3 {
-    let xyz: Vec<_> = bone.split(" ").collect();
-    if xyz.len() == 3 {
-        if let (Ok(x), Ok(y), Ok(z)) = (
-            xyz[0].parse::<f32>(),
-            xyz[1].parse::<f32>(),
-            xyz[2].parse::<f32>(),
-        ) {
-            return Vec3::new(x, y, z);
-        }
-    }
-    panic!("Invalid bone: {bone}");
 }
 
 impl FromStr for PtDef {
@@ -182,6 +171,23 @@ impl RingCfg {
         }
         defs
     }
+
+    /// Parse a bone vector
+    fn parse_bone(&self) -> Option<Vec3> {
+        self.bone.as_ref().map(|bone| {
+            let xyz: Vec<_> = bone.split(" ").collect();
+            if xyz.len() == 3 {
+                if let (Ok(x), Ok(y), Ok(z)) = (
+                    xyz[0].parse::<f32>(),
+                    xyz[1].parse::<f32>(),
+                    xyz[2].parse::<f32>(),
+                ) {
+                    return Vec3::new(x, y, z);
+                }
+            }
+            panic!("Invalid bone: {bone}");
+        })
+    }
 }
 
 impl ModelBuilder {
@@ -213,20 +219,18 @@ impl ModelBuilder {
 
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
-        // FIXME: use bone vector here
-        let y = ring.number as f32;
+        let bone = ring.bone.normalize();
         for (i, ptd) in ring.point_defs.iter().enumerate() {
             let angle = ring.angle(i);
             match ptd {
                 PtDef::Limits(near, _far) => {
                     self.push_point(angle, ring.number);
-                    // FIXME: should be angle around bone vector
-                    let dist = near * ring.scale;
-                    let x = dist * angle.sin();
-                    let z = dist * angle.cos();
-                    self.builder.push_vtx(Vec3::new(x, y, z));
+                    let rot = Quat::from_axis_angle(bone, angle);
+                    let dist = near * ring.scale; // FIXME: use far
+                    let pt = ring.center + rot * Vec3::new(dist, 0.0, 0.0);
+                    self.builder.push_vtx(pt);
                 }
-                PtDef::Branch(_) => self.push_hole(angle, ring.number),
+                PtDef::Branch(_label) => self.push_hole(angle, ring.number),
             }
         }
     }
@@ -288,6 +292,7 @@ impl Model {
                 model.make_band(ring.number - 1, ring.number);
             }
             ring.number += 1;
+            ring.center += ring.bone;
         }
         model.builder.build()
     }
