@@ -1,9 +1,9 @@
 ring:
-  scale: 1.2
-  points: 1 * 6
+  scale: 1.5
+  points: 1 * 24
 ring:
   scale: 1.0
-  points: 1 0.1 1 1 1 1
+  points: . 0.1 . . . .
 ring:
   scale: 0.8
   points: 1 * 5

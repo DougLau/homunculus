@@ -14,7 +14,7 @@ use std::str::FromStr;
 /// A point on a model surface
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 struct Point {
-    /// Ring angle (must be first for PartialOrd)
+    /// Angle on ring (must be first for PartialOrd)
     angle: f32,
 
     /// Ring number
@@ -25,7 +25,7 @@ struct Point {
 }
 
 /// Point definition
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum PtDef {
     /// Point limits around axis
     Limits(f32, f32),
@@ -35,7 +35,7 @@ enum PtDef {
 }
 
 /// Ring on surface of model
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct Ring {
     /// Ring number
     number: usize,
@@ -130,19 +130,25 @@ impl FromStr for PtDef {
         match len {
             1 => match code.parse::<f32>() {
                 Ok(pt) => Ok(PtDef::Limits(pt, pt)),
-                Err(_) => Ok(PtDef::Branch(code.into())),
+                Err(_) => {
+                    if code == "." {
+                        Ok(PtDef::Limits(1.0, 1.0))
+                    } else {
+                        Ok(PtDef::Branch(code.into()))
+                    }
+                }
             },
             2 => match (codes[0].parse::<f32>(), codes[1].parse::<f32>()) {
                 (Ok(near), Ok(far)) => {
                     if near > far {
-                        Err("Near > far: {code}")
+                        Err("Near > far")
                     } else {
                         Ok(PtDef::Limits(near, far))
                     }
                 }
-                _ => Err("Invalid points: {code}"),
+                _ => Err("Invalid points"),
             },
-            _ => Err("Invalid points: {code}"),
+            _ => Err("Invalid points"),
         }
     }
 }
@@ -167,7 +173,7 @@ impl RingCfg {
                 repeat = true;
                 continue;
             }
-            defs.push(code.parse().unwrap());
+            defs.push(code.parse().expect("Invalid point code"));
         }
         defs
     }
