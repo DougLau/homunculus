@@ -6,16 +6,15 @@ use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder};
 use glam::{Quat, Vec3};
 use serde_derive::Deserialize;
-use std::collections::VecDeque;
 use std::f32::consts::PI;
 use std::io::Write;
 use std::str::FromStr;
 
 /// A point on a model surface
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Point {
-    /// Angle on ring (must be first for PartialOrd)
-    angle: f32,
+    /// Degrees around ring (must be first for `Ord`)
+    order_deg: usize,
 
     /// Ring number
     ring_number: usize,
@@ -34,8 +33,8 @@ enum PtDef {
     Branch(String),
 }
 
-/// Ring on surface of model
-#[derive(Clone, Debug, Default)]
+/// Ring around surface of model
+#[derive(Clone, Debug)]
 struct Ring {
     /// Ring number
     number: usize,
@@ -43,30 +42,30 @@ struct Ring {
     /// Center point
     center: Vec3,
 
-    /// Scale factor
-    scale: f32,
+    /// Axis vector
+    axis: Vec3,
 
     /// Point definitions
     point_defs: Vec<PtDef>,
 
-    /// Bone vector
-    bone: Vec3,
+    /// Scale factor
+    scale: f32,
 }
 
 /// Ring configuration
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct RingCfg {
     /// Ring label
     label: Option<String>,
 
-    /// Scale factor
-    scale: Option<f32>,
+    /// Axis vector
+    axis: Option<String>,
 
     /// Point limits
     points: Vec<String>,
 
-    /// Bone vector
-    bone: Option<String>,
+    /// Scale factor
+    scale: Option<f32>,
 }
 
 /// Model configuration
@@ -85,28 +84,40 @@ struct ModelBuilder {
     points: Vec<Point>,
 }
 
-impl Ring {
-    fn new() -> Self {
+impl Default for Ring {
+    fn default() -> Self {
         Ring {
             number: 0,
             center: Vec3::new(0.0, 0.0, 0.0),
-            scale: 1.0,
+            axis: Vec3::new(0.0, 1.0, 0.0),
             point_defs: vec![],
-            bone: Vec3::new(0.0, 1.0, 0.0),
+            scale: 1.0,
         }
     }
+}
 
+impl Ring {
     /// Update ring from a configuration
     fn with_config(&mut self, cfg: &RingCfg) {
-        if let Some(scale) = cfg.scale {
-            self.scale = scale;
+        if let Some(axis) = cfg.parse_axis() {
+            self.axis = axis;
         }
         if !cfg.points.is_empty() {
             self.point_defs = cfg.point_defs();
         }
-        if let Some(bone) = cfg.parse_bone() {
-            self.bone = bone;
+        if let Some(scale) = cfg.scale {
+            self.scale = scale;
         }
+    }
+
+    /// Get half step in degrees
+    fn half_step(&self) -> usize {
+        180 / self.point_defs.len()
+    }
+
+    /// Calculate the degrees around ring
+    fn order_deg(&self, i: usize) -> usize {
+        360 * i / self.point_defs.len()
     }
 
     /// Calculate the angle of a point
@@ -154,6 +165,23 @@ impl FromStr for PtDef {
 }
 
 impl RingCfg {
+    /// Parse an axis vector
+    fn parse_axis(&self) -> Option<Vec3> {
+        self.axis.as_ref().map(|axis| {
+            let xyz: Vec<_> = axis.split(" ").collect();
+            if xyz.len() == 3 {
+                if let (Ok(x), Ok(y), Ok(z)) = (
+                    xyz[0].parse::<f32>(),
+                    xyz[1].parse::<f32>(),
+                    xyz[2].parse::<f32>(),
+                ) {
+                    return Vec3::new(x, y, z);
+                }
+            }
+            panic!("Invalid axis: {axis}");
+        })
+    }
+
     /// Get point definitions
     fn point_defs(&self) -> Vec<PtDef> {
         let mut defs = vec![];
@@ -177,23 +205,6 @@ impl RingCfg {
         }
         defs
     }
-
-    /// Parse a bone vector
-    fn parse_bone(&self) -> Option<Vec3> {
-        self.bone.as_ref().map(|bone| {
-            let xyz: Vec<_> = bone.split(" ").collect();
-            if xyz.len() == 3 {
-                if let (Ok(x), Ok(y), Ok(z)) = (
-                    xyz[0].parse::<f32>(),
-                    xyz[1].parse::<f32>(),
-                    xyz[2].parse::<f32>(),
-                ) {
-                    return Vec3::new(x, y, z);
-                }
-            }
-            panic!("Invalid bone: {bone}");
-        })
-    }
 }
 
 impl ModelBuilder {
@@ -205,19 +216,19 @@ impl ModelBuilder {
     }
 
     /// Push one point
-    fn push_point(&mut self, angle: f32, ring_number: usize) {
+    fn push_point(&mut self, order_deg: usize, ring_number: usize) {
         let vertex = Some(self.builder.vertices());
         self.points.push(Point {
-            angle,
+            order_deg,
             ring_number,
             vertex,
         });
     }
 
     /// Push one hole
-    fn push_hole(&mut self, angle: f32, ring_number: usize) {
+    fn push_hole(&mut self, order_deg: usize, ring_number: usize) {
         self.points.push(Point {
-            angle,
+            order_deg,
             ring_number,
             vertex: None,
         });
@@ -225,57 +236,71 @@ impl ModelBuilder {
 
     /// Add a ring
     fn add_ring(&mut self, ring: Ring) {
-        let bone = ring.bone.normalize();
+        let axis = ring.axis.normalize();
         for (i, ptd) in ring.point_defs.iter().enumerate() {
-            let angle = ring.angle(i);
+            let order_deg = ring.order_deg(i);
             match ptd {
                 PtDef::Limits(near, _far) => {
-                    self.push_point(angle, ring.number);
-                    let rot = Quat::from_axis_angle(bone, angle);
+                    self.push_point(order_deg, ring.number);
+                    let angle = ring.angle(i);
+                    let rot = Quat::from_axis_angle(axis, angle);
                     let dist = near * ring.scale; // FIXME: use far
                     let pt = ring.center + rot * Vec3::new(dist, 0.0, 0.0);
                     self.builder.push_vtx(pt);
                 }
-                PtDef::Branch(_label) => self.push_hole(angle, ring.number),
+                PtDef::Branch(_label) => self.push_hole(order_deg, ring.number),
             }
         }
     }
 
-    /// Make a band around the model
-    fn make_band(&mut self, ring0: usize, ring1: usize) {
-        let mut band = VecDeque::new();
+    /// Get the points for one ring
+    fn ring_points(&self, ring: &Ring, hs_other: usize) -> Vec<Point> {
+        let mut pts = vec![];
         for point in &self.points {
-            if point.ring_number == ring0 || point.ring_number == ring1 {
-                band.push_back(point);
+            if point.ring_number == ring.number {
+                let mut pt = point.clone();
+                // adjust degrees by half step of other ring
+                pt.order_deg = (pt.order_deg + hs_other) % 360;
+                pts.push(pt);
             }
         }
-        band.make_contiguous()
-            .sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let ipt = band.pop_front().unwrap();
-        let jpt = band.pop_front().unwrap();
-        let mut ivtx = ipt.vertex;
-        let mut jvtx = jpt.vertex;
-        assert!(ivtx != jvtx);
-        if jpt.ring_number > ipt.ring_number {
-            (ivtx, jvtx) = (jvtx, ivtx);
-        }
-        let (avtx, bvtx) = (ivtx, jvtx);
-        while let Some(pt) = band.pop_front() {
-            if let (Some(i), Some(j), Some(p)) = (ivtx, jvtx, pt.vertex) {
-                self.builder.push_face(Face::new([i, j, p]));
-            }
-            if pt.ring_number == ring1 {
-                ivtx = pt.vertex;
+        pts.sort();
+        pts.reverse();
+        pts
+    }
+
+    /// Make a band of faces between two rings
+    fn make_band(&mut self, ring0: &Ring, ring1: &Ring) {
+        assert_ne!(ring0.number, ring1.number);
+        // get points for each ring
+        let mut pts0 = self.ring_points(ring0, ring1.half_step());
+        let mut pts1 = self.ring_points(ring1, ring0.half_step());
+        let first0 = pts0.pop().unwrap().vertex;
+        let first1 = pts1.pop().unwrap().vertex;
+        pts0.append(&mut pts1);
+        pts0.sort();
+        pts0.reverse();
+        let mut band = pts0;
+        let (mut vtx0, mut vtx1) = (first0, first1);
+        // create faces of band as a triangle strip
+        while let Some(pt) = band.pop() {
+            self.add_face([vtx0, vtx1, pt.vertex]);
+            if pt.ring_number == ring0.number {
+                vtx0 = pt.vertex;
             } else {
-                jvtx = pt.vertex;
+                vtx1 = pt.vertex;
             }
         }
-        // Connect with first vertices
-        if let (Some(i), Some(j), Some(b)) = (ivtx, jvtx, bvtx) {
-            self.builder.push_face(Face::new([i, j, b]));
-        }
-        if let (Some(b), Some(a), Some(i)) = (bvtx, avtx, ivtx) {
-            self.builder.push_face(Face::new([b, a, i]));
+        // connect with first vertices on band
+        self.add_face([vtx0, vtx1, first1]);
+        self.add_face([first1, first0, vtx0]);
+    }
+
+    /// Add a triangle face
+    fn add_face(&mut self, vtx: [Option<usize>; 3]) {
+        // if any vertices are None, there is a hole
+        if let (Some(v0), Some(v1), Some(v2)) = (vtx[0], vtx[1], vtx[2]) {
+            self.builder.push_face(Face::new([v0, v1, v2]));
         }
     }
 }
@@ -290,15 +315,18 @@ impl Model {
     /// Build a mesh from the configuration
     fn build(&self) -> Mesh {
         let mut model = ModelBuilder::new();
-        let mut ring = Ring::new();
+        let mut ring = Ring::default();
+        let mut pring = ring.clone();
         for cfg in &self.ring {
             ring.with_config(&cfg);
             model.add_ring(ring.clone());
+            // FIXME: link rings
             if ring.number > 0 {
-                model.make_band(ring.number - 1, ring.number);
+                model.make_band(&ring, &pring);
             }
+            pring = ring.clone();
             ring.number += 1;
-            ring.center += ring.bone;
+            ring.center += ring.axis;
         }
         model.builder.build()
     }
