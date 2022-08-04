@@ -24,3 +24,7 @@ ring:
 ring:
   scale: 0.1
   points: 1
+ring:
+  branch: b
+  points: 1 * 6
+  scale: 0.4

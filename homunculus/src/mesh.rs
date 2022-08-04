@@ -96,6 +96,11 @@ impl MeshBuilder {
         self.pos.len()
     }
 
+    /// Get a vertex
+    pub fn vertex(&self, idx: usize) -> Vec3 {
+        self.pos[idx]
+    }
+
     /// Push a vertex position
     pub fn push_vtx(&mut self, pos: Vec3) -> usize {
         let idx = self.pos.len();
