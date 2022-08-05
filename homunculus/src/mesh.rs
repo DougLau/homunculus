@@ -25,7 +25,7 @@ pub enum Edge {
 /// Triangle face
 ///
 /// Vertices and edges:
-/// ```
+/// ```text
 /// v0______v2
 ///   \ e2 /
 /// e0 \  / e1

@@ -4,6 +4,7 @@
 //
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder};
+use crate::plane::Plane;
 use glam::{Quat, Vec3};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -94,8 +95,8 @@ struct ModelBuilder {
     /// All points on mesh
     points: Vec<Point>,
 
-    /// Branches (label to vertices mapping)
-    branches: HashMap<String, Vec<usize>>,
+    /// Branches (label to edge vertices mapping)
+    branches: HashMap<String, Vec<[usize; 2]>>,
 }
 
 impl Default for Ring {
@@ -138,15 +139,9 @@ impl Ring {
         180 / self.point_defs.len()
     }
 
-    /// Calculate the degrees around ring
-    fn order_deg(&self, i: usize) -> usize {
-        360 * i / self.point_defs.len()
-    }
-
     /// Calculate the angle of a point
     fn angle(&self, i: usize) -> f32 {
-        let count = self.point_defs.len() as f32;
-        i as f32 / count * PI * 2.0
+        2.0 * PI * i as f32 / self.point_defs.len() as f32
     }
 }
 
@@ -244,8 +239,8 @@ impl ModelBuilder {
     }
 
     /// Push one point
-    fn push_point(&mut self, order_deg: usize, ring_id: usize, vtx: usize) {
-        let pt_type = PtType::Vertex(vtx);
+    fn push_point(&mut self, order_deg: usize, ring_id: usize, vid: usize) {
+        let pt_type = PtType::Vertex(vid);
         self.points.push(Point {
             order_deg,
             ring_id,
@@ -255,9 +250,6 @@ impl ModelBuilder {
 
     /// Push one hole
     fn push_hole(&mut self, order_deg: usize, ring_id: usize, branch: String) {
-        if !self.branches.contains_key(&branch) {
-            self.branches.insert(branch.clone(), vec![]);
-        }
         let pt_type = PtType::Branch(branch);
         self.points.push(Point {
             order_deg,
@@ -270,16 +262,17 @@ impl ModelBuilder {
     fn add_ring(&mut self, ring: Ring) {
         let axis = ring.axis().normalize();
         for (i, ptd) in ring.point_defs.iter().enumerate() {
-            let order_deg = ring.order_deg(i);
+            let angle = ring.angle(i);
+            let order_deg = angle.to_degrees() as usize;
             match ptd {
                 PtDef::Limits(near, _far) => {
-                    let vtx = self.builder.vertices();
-                    self.push_point(order_deg, ring.id, vtx);
-                    let angle = ring.angle(i);
-                    let rot = Quat::from_axis_angle(axis, angle);
+                    let vid = self.builder.vertices();
+                    self.push_point(order_deg, ring.id, vid);
+                    let rot = Quat::from_axis_angle(axis, angle)
+                        * orthonormal_zero(axis);
                     let dist = near * ring.scale; // FIXME: use far
-                    let pt = ring.center + rot * Vec3::new(dist, 0.0, 0.0);
-                    self.builder.push_vtx(pt);
+                    let vtx = ring.center + rot * dist;
+                    self.builder.push_vtx(vtx);
                 }
                 PtDef::Branch(branch) => {
                     self.push_hole(order_deg, ring.id, branch.clone())
@@ -290,52 +283,42 @@ impl ModelBuilder {
 
     /// Add a branch base ring
     fn add_branch(&mut self, branch: &str, ring: &Ring) -> Option<Ring> {
-        let mut center = Vec3::new(0.0, 0.0, 0.0);
-        let points = self.branch_points(branch);
-        if points.is_empty() {
+        let vertices = self.branch_vertices(branch);
+        if vertices.is_empty() {
             return None;
         }
-        for idx in &points {
-            center += self.builder.vertex(*idx);
-        }
-        let len = points.len();
-        center /= len as f32;
-        dbg!(&center);
-        let axis = ring.axis.unwrap_or_else(|| {
-            self.branch_axis(branch, center)
-        });
-        dbg!(&axis);
+        let len = vertices.len();
+        let center = vertices
+            .iter()
+            .map(|i| self.builder.vertex(*i))
+            .fold(Vec3::ZERO, |a, b| a + b)
+            / len as f32;
+        let axis = ring
+            .axis
+            .unwrap_or_else(|| self.branch_axis(branch, center));
         let mut pring = Ring::default();
         pring.id = ring.id;
         pring.center = center;
         pring.axis = Some(axis);
         pring.point_defs = vec![PtDef::Limits(1.0, 1.0); len];
         pring.scale = ring.scale;
-        self.push_point(10, ring.id, 19); // 0.1745
-        self.push_point(70, ring.id, 14); // 1.2217
-        self.push_point(130, ring.id, 15); // 2.2689
-        self.push_point(190, ring.id, 20); // 3.3161
-        self.push_point(250, ring.id, 24); // 4.3633
-        self.push_point(310, ring.id, 23); // 5.4105
-        for pt in points {
-            // FIXME: calculate `order_deg`
-            let vtx = (self.builder.vertex(pt) - center).normalize();
-            let rot = Quat::from_axis_angle(axis, 0.0);
-            let zero = rot * Vec3::new(1.0, 0.0, 0.0);
-            dbg!(pt);
-            dbg!(vtx.angle_between(zero));
+        for (order_deg, vid) in self.branch_angles(branch, axis, center) {
+            self.push_point(order_deg, ring.id, vid);
         }
         Some(pring)
     }
 
-    /// Get all points on a branch base
-    fn branch_points(&self, branch: &str) -> Vec<usize> {
+    /// Get all vertices on a branch base
+    fn branch_vertices(&self, branch: &str) -> Vec<usize> {
         match self.branches.get(branch) {
-            Some(vtx) => {
-                let mut vtx = vtx.clone();
-                vtx.sort();
-                vtx.dedup();
-                vtx
+            Some(edges) => {
+                let mut vertices = edges
+                    .iter()
+                    .flat_map(|e| [e[0], e[1]].into_iter())
+                    .collect::<Vec<usize>>();
+                vertices.sort();
+                vertices.dedup();
+                vertices
             }
             None => vec![],
         }
@@ -344,18 +327,59 @@ impl ModelBuilder {
     /// Calculate axis for a branch base
     fn branch_axis(&self, branch: &str, center: Vec3) -> Vec3 {
         match self.branches.get(branch) {
-            Some(vtx) => {
-                let mut norm = Vec3::default();
-                // FIXME: this doesn't work with two Branch points
-                for v in vtx.chunks_exact(2) {
-                    let v0 = self.builder.vertex(v[0]);
-                    let v1 = self.builder.vertex(v[1]);
-                    let trin = (center - v0).cross(center - v1).normalize();
-                    norm += trin;
+            Some(edges) => {
+                let mut norm = Vec3::ZERO;
+                for edge in edges {
+                    let v0 = self.builder.vertex(edge[0]);
+                    let v1 = self.builder.vertex(edge[1]);
+                    norm += (center - v0).cross(center - v1);
                 }
-                norm
+                norm.normalize()
             }
             None => Vec3::new(0.0, 1.0, 0.0),
+        }
+    }
+
+    /// Calculate angles for a branch base
+    fn branch_angles(
+        &self,
+        branch: &str,
+        axis: Vec3,
+        center: Vec3,
+    ) -> Vec<(usize, usize)> {
+        match self.branches.get(branch) {
+            Some(edges) => {
+                let plane = Plane::new(axis, center);
+                let zero_deg = center + orthonormal_zero(axis);
+                // Step 1: find "first" edge vertex (closest to 0 degrees)
+                let mut edge = 0;
+                let mut angle = f32::MAX;
+                for i in 0..edges.len() {
+                    let vid = edges[i][0];
+                    let vtx = plane.project_point(self.builder.vertex(vid));
+                    let ang = (zero_deg - center).angle_between(vtx - center);
+                    if ang < angle {
+                        angle = ang;
+                        edge = i;
+                    }
+                }
+                // Step 2: sort edge vertices by common end-points
+                let vids = edge_vids(&edges, edge);
+                // Step 3: make vec of (order_deg, vid)
+                let mut angle = 0.0;
+                let mut pvtx = zero_deg;
+                let mut angles = vec![];
+                for vid in vids {
+                    let vtx = plane.project_point(self.builder.vertex(vid));
+                    let ang = (pvtx - center).angle_between(vtx - center);
+                    angle += ang;
+                    let order_deg = angle.to_degrees() as usize;
+                    angles.push((order_deg, vid));
+                    pvtx = vtx;
+                }
+                angles
+            }
+            None => vec![],
         }
     }
 
@@ -387,19 +411,19 @@ impl ModelBuilder {
         pts0.sort();
         pts0.reverse();
         let mut band = pts0;
-        let (mut vtx0, mut vtx1) = (first0.clone(), first1.clone());
+        let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&vtx0, &vtx1, &pt]);
+            self.add_face([&pt0, &pt1, &pt]);
             if pt.ring_id == ring0.id {
-                vtx0 = pt;
+                pt0 = pt;
             } else {
-                vtx1 = pt;
+                pt1 = pt;
             }
         }
         // connect with first vertices on band
-        self.add_face([&vtx0, &vtx1, &first1]);
-        self.add_face([&first1, &first0, &vtx0]);
+        self.add_face([&pt0, &pt1, &first1]);
+        self.add_face([&first1, &first0, &pt0]);
     }
 
     /// Add a triangle face
@@ -411,25 +435,59 @@ impl ModelBuilder {
             (PtType::Branch(b), PtType::Vertex(v0), PtType::Vertex(v1))
             | (PtType::Vertex(v1), PtType::Branch(b), PtType::Vertex(v0))
             | (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Branch(b)) => {
-                if let Some(vtx) = self.branches.get_mut(b) {
-                    vtx.push(*v0);
-                    vtx.push(*v1);
+                if !self.branches.contains_key(b) {
+                    self.branches.insert(b.clone(), vec![]);
                 }
+                let edges = self.branches.get_mut(b).unwrap();
+                edges.push([*v0, *v1]);
             }
-            (PtType::Vertex(v), PtType::Branch(b0), PtType::Branch(b1))
-            | (PtType::Branch(b0), PtType::Vertex(v), PtType::Branch(b1))
-            | (PtType::Branch(b0), PtType::Branch(b1), PtType::Vertex(v)) => {
+            (PtType::Vertex(_v), PtType::Branch(b0), PtType::Branch(b1))
+            | (PtType::Branch(b0), PtType::Vertex(_v), PtType::Branch(b1))
+            | (PtType::Branch(b0), PtType::Branch(b1), PtType::Vertex(_v)) => {
+                // A single vertex and two branch points:
+                // - both points must be for the same branch
+                // - no edges need to be added
                 assert_eq!(b0, b1);
-                dbg!((b0, v));
-                todo!();
             }
             (PtType::Branch(b0), PtType::Branch(b1), PtType::Branch(b2)) => {
+                // Three adjacent branch points:
+                // - all points must be for the same branch
                 assert_eq!(b0, b1);
                 assert_eq!(b1, b2);
-                todo!();
             }
         }
     }
+}
+
+/// Get the orthonormal to a vector at zero degrees
+///
+/// We don't use `Vec3::any_orthonormal_vector` since the returned vector may
+/// change in a future glam update.
+fn orthonormal_zero(v: Vec3) -> Vec3 {
+    if v.x.abs() > v.y.abs() {
+        Vec3::new(-v.z, 0.0, v.x)
+    } else {
+        Vec3::new(0.0, v.z, -v.y)
+    }
+    .normalize()
+}
+
+/// Get edge vertices sorted by common end-points
+fn edge_vids(edges: &[[usize; 2]], edge: usize) -> Vec<usize> {
+    let mut edges = edges.to_vec();
+    if edge > 0 {
+        edges.swap(0, edge);
+    }
+    let mut vid = edges[0][1];
+    for i in 1..edges.len() {
+        for j in (i + 1)..edges.len() {
+            if vid == edges[j][0] {
+                edges.swap(i, j);
+            }
+        }
+        vid = edges[i][1];
+    }
+    edges.into_iter().map(|e| e[0]).collect()
 }
 
 impl Model {
