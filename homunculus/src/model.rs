@@ -3,10 +3,10 @@
 // Copyright (c) 2022  Douglas Lau
 //
 use crate::gltf;
-use crate::mesh::{Face, Mesh, MeshBuilder};
+use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
 use crate::plane::Plane;
 use glam::{Quat, Vec3};
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::io::Write;
@@ -62,10 +62,13 @@ struct Ring {
 
     /// Scale factor
     scale: f32,
+
+    /// Edge smoothing
+    smoothing: Smoothing,
 }
 
 /// Ring configuration
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RingCfg {
     /// Ring branch label
     branch: Option<String>,
@@ -78,10 +81,13 @@ pub struct RingCfg {
 
     /// Scale factor
     scale: Option<f32>,
+
+    /// Smoothing setting
+    smoothing: Option<String>,
 }
 
 /// Model configuration
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Model {
     /// Vec of all rings
     ring: Vec<RingCfg>,
@@ -107,6 +113,7 @@ impl Default for Ring {
             axis: None,
             point_defs: vec![],
             scale: 1.0,
+            smoothing: Smoothing::Smooth,
         }
     }
 }
@@ -123,7 +130,7 @@ impl Ring {
             // clear previous axis on new branches
             self.axis = None;
         }
-        if let Some(axis) = cfg.parse_axis() {
+        if let Some(axis) = cfg.axis() {
             self.axis = Some(axis);
         }
         if !cfg.points.is_empty() {
@@ -131,6 +138,9 @@ impl Ring {
         }
         if let Some(scale) = cfg.scale {
             self.scale = scale;
+        }
+        if let Some(smoothing) = cfg.smoothing() {
+            self.smoothing = smoothing;
         }
     }
 
@@ -183,8 +193,8 @@ impl FromStr for PtDef {
 }
 
 impl RingCfg {
-    /// Parse an axis vector
-    fn parse_axis(&self) -> Option<Vec3> {
+    /// Parse axis vector
+    fn axis(&self) -> Option<Vec3> {
         self.axis.as_ref().map(|axis| {
             let xyz: Vec<_> = axis.split(" ").collect();
             if xyz.len() == 3 {
@@ -222,6 +232,15 @@ impl RingCfg {
             defs.push(code.parse().expect("Invalid point code"));
         }
         defs
+    }
+
+    /// Get edge smoothing
+    fn smoothing(&self) -> Option<Smoothing> {
+        match self.smoothing.as_deref() {
+            Some("flat") => Some(Smoothing::Sharp),
+            Some("smooth") => Some(Smoothing::Smooth),
+            _ => None,
+        }
     }
 }
 
@@ -414,7 +433,7 @@ impl ModelBuilder {
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&pt0, &pt1, &pt]);
+            self.add_face([&pt0, &pt1, &pt], ring0.smoothing);
             if pt.ring_id == ring0.id {
                 pt0 = pt;
             } else {
@@ -422,15 +441,16 @@ impl ModelBuilder {
             }
         }
         // connect with first vertices on band
-        self.add_face([&pt0, &pt1, &first1]);
-        self.add_face([&first1, &first0, &pt0]);
+        self.add_face([&pt0, &pt1, &first1], ring0.smoothing);
+        self.add_face([&first1, &first0, &pt0], ring0.smoothing);
     }
 
     /// Add a triangle face
-    fn add_face(&mut self, pts: [&Point; 3]) {
+    fn add_face(&mut self, pts: [&Point; 3], smoothing: Smoothing) {
         match (&pts[0].pt_type, &pts[1].pt_type, &pts[2].pt_type) {
             (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Vertex(v2)) => {
-                self.builder.push_face(Face::new([*v0, *v1, *v2]));
+                let face = Face::new([*v0, *v1, *v2], smoothing);
+                self.builder.push_face(face);
             }
             (PtType::Branch(b), PtType::Vertex(v0), PtType::Vertex(v1))
             | (PtType::Vertex(v1), PtType::Branch(b), PtType::Vertex(v0))

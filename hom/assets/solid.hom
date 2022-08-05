@@ -1,17 +1,18 @@
 ring:
-  scale: 1.5
   points: 1 * 24
+  scale: 1.5
+  smoothing: flat
 ring:
-  scale: 1.0
   points: . 0.1 . . . .
+  scale: 1.0
 ring:
-  scale: 0.8
   points: 1 * 5
+  scale: 0.8
 ring:
   scale: 0.5
 ring:
-  scale: 0.2
   points: 1 * 4
+  scale: 0.2
 ring:
-  scale: 0.1
-  points: 1
+  points: 1 * 3
+  scale: 0.01

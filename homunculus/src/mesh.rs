@@ -17,8 +17,10 @@ impl From<usize> for Vertex {
 
 /// Face edge smoothng
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Edge {
+pub enum Smoothing {
+    /// Sharp edges
     Sharp,
+    /// Smooth edges
     Smooth,
 }
 
@@ -37,7 +39,7 @@ pub struct Face {
     /// Vertex positions
     vtx: [usize; 3],
     /// Edge smoothing
-    edge: [Edge; 3],
+    edge: [Smoothing; 3],
 }
 
 /// Mesh builder
@@ -61,25 +63,22 @@ pub struct Mesh {
 
 impl Face {
     /// Create a new face
-    pub fn new(vtx: [usize; 3]) -> Self {
-        let edge = [Edge::Sharp; 3];
+    pub fn new(vtx: [usize; 3], smoothing: Smoothing) -> Self {
+        let edge = [smoothing; 3];
         Self { vtx, edge }
-    }
-
-    /// Make shading flat (not smooth)
-    pub fn with_flat(mut self) -> Self {
-        self.edge = [Edge::Sharp; 3];
-        self
     }
 
     /// Check if a vertex is next to a sharp edge
     fn is_sharp_vertex(&self, idx: usize) -> bool {
         (self.vtx[0] == idx
-            && (self.edge[0] == Edge::Sharp || self.edge[2] == Edge::Sharp))
+            && (self.edge[0] == Smoothing::Sharp
+                || self.edge[2] == Smoothing::Sharp))
             || (self.vtx[1] == idx
-                && (self.edge[1] == Edge::Sharp || self.edge[0] == Edge::Sharp))
+                && (self.edge[1] == Smoothing::Sharp
+                    || self.edge[0] == Smoothing::Sharp))
             || (self.vtx[2] == idx
-                && (self.edge[2] == Edge::Sharp || self.edge[1] == Edge::Sharp))
+                && (self.edge[2] == Smoothing::Sharp
+                    || self.edge[1] == Smoothing::Sharp))
     }
 }
 
