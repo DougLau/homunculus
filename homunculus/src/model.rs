@@ -88,7 +88,7 @@ pub struct RingCfg {
 
 /// Model configuration
 #[derive(Deserialize, Serialize)]
-pub struct Model {
+pub struct ModelCfg {
     /// Vec of all rings
     ring: Vec<RingCfg>,
 }
@@ -496,7 +496,7 @@ fn edge_vids(edges: &[[usize; 2]], edge: usize) -> Vec<usize> {
     edges.into_iter().map(|e| e[0]).collect()
 }
 
-impl Model {
+impl ModelCfg {
     /// Write model as glTF
     pub fn write_gltf<W: Write>(&self, writer: W) -> std::io::Result<()> {
         let mesh = self.build();
@@ -511,6 +511,7 @@ impl Model {
         for cfg in &self.ring {
             ring.with_config(cfg);
             if let Some(branch) = &cfg.branch {
+                // FIXME: add cap to previous ring
                 pring = model.add_branch(branch, &ring);
                 if let (None, Some(pring)) = (ring.axis, &pring) {
                     ring.axis = Some(pring.axis());

@@ -7,4 +7,4 @@ mod mesh;
 mod model;
 mod plane;
 
-pub use model::Model;
+pub use model::ModelCfg;
