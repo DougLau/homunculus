@@ -38,8 +38,8 @@ struct Point {
 /// Point definition
 #[derive(Clone, Debug)]
 enum PtDef {
-    /// Point limits around axis
-    Limits(f32, f32),
+    /// Distance from axis
+    Distance(f32),
 
     /// Branch label
     Branch(String),
@@ -164,30 +164,15 @@ impl FromStr for PtDef {
     type Err = &'static str;
 
     fn from_str(code: &str) -> Result<Self, Self::Err> {
-        let codes: Vec<&str> = code.split("..").collect();
-        let len = codes.len();
-        match len {
-            1 => match code.parse::<f32>() {
-                Ok(pt) => Ok(PtDef::Limits(pt, pt)),
-                Err(_) => {
-                    if code == "." {
-                        Ok(PtDef::Limits(1.0, 1.0))
-                    } else {
-                        Ok(PtDef::Branch(code.into()))
-                    }
+        match code.parse::<f32>() {
+            Ok(pt) => Ok(PtDef::Distance(pt)),
+            Err(_) => {
+                if code == "." {
+                    Ok(PtDef::Distance(1.0))
+                } else {
+                    Ok(PtDef::Branch(code.into()))
                 }
-            },
-            2 => match (codes[0].parse::<f32>(), codes[1].parse::<f32>()) {
-                (Ok(near), Ok(far)) => {
-                    if near > far {
-                        Err("Near > far")
-                    } else {
-                        Ok(PtDef::Limits(near, far))
-                    }
-                }
-                _ => Err("Invalid points"),
-            },
-            _ => Err("Invalid points"),
+            }
         }
     }
 }
@@ -217,8 +202,7 @@ impl RingCfg {
         for code in &self.points {
             if repeat {
                 let count = parse_count(code);
-                let ptd =
-                    defs.last().cloned().unwrap_or(PtDef::Limits(1.0, 1.0));
+                let ptd = defs.last().cloned().unwrap_or(PtDef::Distance(1.0));
                 for _ in 1..count {
                     defs.push(ptd.clone());
                 }
@@ -284,12 +268,12 @@ impl ModelBuilder {
             let angle = ring.angle(i);
             let order_deg = angle.to_degrees() as usize;
             match ptd {
-                PtDef::Limits(near, _far) => {
+                PtDef::Distance(dist) => {
                     let vid = self.builder.vertices();
                     self.push_point(order_deg, ring.id, vid);
                     let rot = Quat::from_axis_angle(axis, angle)
                         * orthonormal_zero(axis);
-                    let dist = near * ring.scale; // FIXME: use far
+                    let dist = dist * ring.scale;
                     let vtx = ring.center + rot * dist;
                     self.builder.push_vtx(vtx);
                 }
@@ -319,7 +303,7 @@ impl ModelBuilder {
         pring.id = ring.id;
         pring.center = center;
         pring.axis = Some(axis);
-        pring.point_defs = vec![PtDef::Limits(1.0, 1.0); len];
+        pring.point_defs = vec![PtDef::Distance(1.0); len];
         pring.scale = ring.scale;
         for (order_deg, vid) in self.branch_angles(branch, axis, center) {
             self.push_point(order_deg, ring.id, vid);
