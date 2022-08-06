@@ -121,7 +121,7 @@ impl Default for Ring {
 impl Ring {
     /// Get the ring axis
     fn axis(&self) -> Vec3 {
-        self.axis.unwrap_or(Vec3::new(0.0, 1.0, 0.0))
+        self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
     /// Update ring from a configuration
@@ -181,7 +181,7 @@ impl RingCfg {
     /// Parse axis vector
     fn axis(&self) -> Option<Vec3> {
         self.axis.as_ref().map(|axis| {
-            let xyz: Vec<_> = axis.split(" ").collect();
+            let xyz: Vec<_> = axis.split(' ').collect();
             if xyz.len() == 3 {
                 if let (Ok(x), Ok(y), Ok(z)) = (
                     xyz[0].parse::<f32>(),
@@ -299,12 +299,14 @@ impl ModelBuilder {
         let axis = ring
             .axis
             .unwrap_or_else(|| self.branch_axis(branch, center));
-        let mut pring = Ring::default();
-        pring.id = ring.id;
-        pring.center = center;
-        pring.axis = Some(axis);
-        pring.point_defs = vec![PtDef::Distance(1.0); len];
-        pring.scale = ring.scale;
+        let pring = Ring {
+            id: ring.id,
+            center,
+            axis: Some(axis),
+            point_defs: vec![PtDef::Distance(1.0); len],
+            scale: ring.scale,
+            ..Default::default()
+        };
         for (order_deg, vid) in self.branch_angles(branch, axis, center) {
             self.push_point(order_deg, ring.id, vid);
         }
@@ -357,8 +359,8 @@ impl ModelBuilder {
                 // Step 1: find "first" edge vertex (closest to 0 degrees)
                 let mut edge = 0;
                 let mut angle = f32::MAX;
-                for i in 0..edges.len() {
-                    let vid = edges[i][0];
+                for (i, ed) in edges.iter().enumerate() {
+                    let vid = ed[0];
                     let vtx = plane.project_point(self.builder.vertex(vid));
                     let ang = (zero_deg - center).angle_between(vtx - center);
                     if ang < angle {
@@ -367,7 +369,7 @@ impl ModelBuilder {
                     }
                 }
                 // Step 2: sort edge vertices by common end-points
-                let vids = edge_vids(&edges, edge);
+                let vids = edge_vids(edges, edge);
                 // Step 3: make vec of (order_deg, vid)
                 let mut angle = 0.0;
                 let mut pvtx = zero_deg;
@@ -498,7 +500,7 @@ impl Model {
     /// Write model as glTF
     pub fn write_gltf<W: Write>(&self, writer: W) -> std::io::Result<()> {
         let mesh = self.build();
-        Ok(gltf::export(writer, &mesh)?)
+        gltf::export(writer, &mesh)
     }
 
     /// Build a mesh from the configuration
@@ -507,12 +509,11 @@ impl Model {
         let mut ring = Ring::default();
         let mut pring = None;
         for cfg in &self.ring {
-            ring.with_config(&cfg);
+            ring.with_config(cfg);
             if let Some(branch) = &cfg.branch {
                 pring = model.add_branch(branch, &ring);
-                match (ring.axis, &pring) {
-                    (None, Some(pring)) => ring.axis = Some(pring.axis()),
-                    _ => (),
+                if let (None, Some(pring)) = (ring.axis, &pring) {
+                    ring.axis = Some(pring.axis());
                 }
                 if let Some(pring) = &pring {
                     ring.center = pring.center + pring.axis().normalize() / 2.0;
