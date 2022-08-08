@@ -6,7 +6,7 @@ mod view;
 
 use anyhow::{Context, Result};
 use argh::FromArgs;
-use homunculus::ModelCfg;
+use homunculus::{Model, ModelCfg};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -60,6 +60,7 @@ fn build_homunculus(path: &Path, stem: &OsStr) -> Result<PathBuf> {
     let out = path.with_file_name(Path::new(stem).with_extension("glb"));
     let writer = File::create(&out)
         .with_context(|| format!("Cannot create {}", out.display()))?;
-    cfg.write_gltf(&writer).context("Writing glTF")?;
+    let model = Model::try_from(&cfg).unwrap();
+    model.write_gltf(&writer).context("Writing glTF")?;
     Ok(out)
 }

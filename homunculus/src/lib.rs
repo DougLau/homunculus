@@ -7,4 +7,4 @@ mod mesh;
 mod model;
 mod plane;
 
-pub use model::ModelCfg;
+pub use model::{Model, ModelCfg, Ring};
