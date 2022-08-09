@@ -116,10 +116,10 @@ impl TryFrom<&RingCfg> for Ring {
 
     fn try_from(cfg: &RingCfg) -> Result<Self, Self::Error> {
         let mut ring = Ring::new();
-        ring.axis = cfg.axis();
+        ring.set_axis(cfg.axis());
+        ring.set_scale(cfg.scale);
+        ring.set_smoothing(cfg.smoothing());
         ring.point_defs = cfg.point_defs();
-        ring.scale = cfg.scale;
-        ring.smoothing = cfg.smoothing();
         Ok(ring)
     }
 }
@@ -143,19 +143,34 @@ impl Ring {
         }
     }
 
-    /// Get the ring axis
-    fn axis(&self) -> Vec3 {
+    /// Get the ring axis (or default value)
+    pub fn axis(&self) -> Vec3 {
         self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
-    /// Get the ring scale
-    fn scale(&self) -> f32 {
+    /// Set the ring axis
+    pub fn set_axis(&mut self, axis: Option<Vec3>) {
+        self.axis = axis;
+    }
+
+    /// Get the ring scale (or default value)
+    pub fn scale(&self) -> f32 {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Get the ring smoothing
-    fn smoothing(&self) -> Smoothing {
+    /// Set the scale
+    pub fn set_scale(&mut self, scale: Option<f32>) {
+        self.scale = scale;
+    }
+
+    /// Get the edge smoothing (or default value)
+    pub fn smoothing(&self) -> Smoothing {
         self.smoothing.unwrap_or(Smoothing::Smooth)
+    }
+
+    /// Set the edge smoothing
+    pub fn set_smoothing(&mut self, smoothing: Option<Smoothing>) {
+        self.smoothing = smoothing;
     }
 
     /// Update with another ring
@@ -172,6 +187,16 @@ impl Ring {
         if ring.smoothing.is_some() {
             self.smoothing = ring.smoothing;
         }
+    }
+
+    /// Add a point
+    pub fn add_point(&mut self, point: f32) {
+        self.point_defs.push(PtDef::Distance(point));
+    }
+
+    /// Add a branch point
+    pub fn add_branch_point(&mut self, branch: &str) {
+        self.point_defs.push(PtDef::Branch(branch.into()));
     }
 
     /// Get half step in degrees

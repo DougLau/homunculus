@@ -7,4 +7,5 @@ mod mesh;
 mod model;
 mod plane;
 
+pub use mesh::Smoothing;
 pub use model::{Model, ModelCfg, Ring};
