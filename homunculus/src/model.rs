@@ -116,9 +116,9 @@ impl TryFrom<&RingCfg> for Ring {
 
     fn try_from(cfg: &RingCfg) -> Result<Self, Self::Error> {
         let mut ring = Ring::new();
-        ring.set_axis(cfg.axis());
-        ring.set_scale(cfg.scale);
-        ring.set_smoothing(cfg.smoothing());
+        *ring.axis_mut() = cfg.axis();
+        *ring.scale_mut() = cfg.scale;
+        *ring.smoothing_mut() = cfg.smoothing();
         ring.point_defs = cfg.point_defs();
         Ok(ring)
     }
@@ -148,9 +148,9 @@ impl Ring {
         self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
-    /// Set the ring axis
-    pub fn set_axis(&mut self, axis: Option<Vec3>) {
-        self.axis = axis;
+    /// Get mutable ring axis
+    pub fn axis_mut(&mut self) -> &mut Option<Vec3> {
+        &mut self.axis
     }
 
     /// Get the ring scale (or default value)
@@ -158,9 +158,9 @@ impl Ring {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Set the scale
-    pub fn set_scale(&mut self, scale: Option<f32>) {
-        self.scale = scale;
+    /// Set mutable scale
+    pub fn scale_mut(&mut self) -> &mut Option<f32> {
+        &mut self.scale
     }
 
     /// Get the edge smoothing (or default value)
@@ -168,9 +168,9 @@ impl Ring {
         self.smoothing.unwrap_or(Smoothing::Smooth)
     }
 
-    /// Set the edge smoothing
-    pub fn set_smoothing(&mut self, smoothing: Option<Smoothing>) {
-        self.smoothing = smoothing;
+    /// Set mutable edge smoothing
+    pub fn smoothing_mut(&mut self) -> &mut Option<Smoothing> {
+        &mut self.smoothing
     }
 
     /// Update with another ring
