@@ -1739,6 +1739,7 @@ name = "homunculus"
 version = "0.2.0"
 dependencies = [
  "glam 0.20.5",
+ "muon-rs",
  "serde",
  "serde_derive",
  "serde_json",

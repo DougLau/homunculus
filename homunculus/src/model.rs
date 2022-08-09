@@ -45,7 +45,7 @@ enum PtDef {
     Branch(String),
 }
 
-/// Ring around surface of model
+/// Ring around surface of a model
 #[derive(Clone, Debug)]
 pub struct Ring {
     /// Ring ID
@@ -67,9 +67,9 @@ pub struct Ring {
     smoothing: Option<Smoothing>,
 }
 
-/// Ring configuration
+/// Ring definition
 #[derive(Debug, Deserialize, Serialize)]
-pub struct RingCfg {
+pub struct RingDef {
     /// Ring branch label
     branch: Option<String>,
 
@@ -86,14 +86,30 @@ pub struct RingCfg {
     smoothing: Option<String>,
 }
 
-/// Model configuration
-#[derive(Deserialize, Serialize)]
-pub struct ModelCfg {
+/// Definition of a 3D model
+///
+/// It can be serialized or deserialized using any [serde] compatible data
+/// format.
+///
+/// After deserializing, a [Model] can be created using `TryFrom`:
+///
+/// ```rust,no_run
+/// # use std::fs::File;
+/// # use homunculus::{Model, ModelDef};
+/// let file = File::open("model.hom").unwrap();
+/// let def: ModelDef = muon_rs::from_reader(file).unwrap();
+/// let model = Model::try_from(&def).unwrap();
+/// ```
+///
+/// [model]: struct.Model.html
+/// [serde]: https://serde.rs/
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ModelDef {
     /// Vec of all rings
-    ring: Vec<RingCfg>,
+    ring: Vec<RingDef>,
 }
 
-/// 3D Model
+/// A 3D model
 pub struct Model {
     /// Mesh builder
     builder: MeshBuilder,
@@ -108,15 +124,15 @@ pub struct Model {
     branches: HashMap<String, Vec<[usize; 2]>>,
 }
 
-impl TryFrom<&RingCfg> for Ring {
+impl TryFrom<&RingDef> for Ring {
     type Error = &'static str;
 
-    fn try_from(cfg: &RingCfg) -> Result<Self, Self::Error> {
+    fn try_from(def: &RingDef) -> Result<Self, Self::Error> {
         let mut ring = Ring::new();
-        *ring.axis_mut() = cfg.axis();
-        *ring.scale_mut() = cfg.scale;
-        *ring.smoothing_mut() = cfg.smoothing();
-        ring.point_defs = cfg.point_defs();
+        *ring.axis_mut() = def.axis();
+        *ring.scale_mut() = def.scale;
+        *ring.smoothing_mut() = def.smoothing();
+        ring.point_defs = def.point_defs();
         Ok(ring)
     }
 }
@@ -226,7 +242,7 @@ impl FromStr for PtDef {
     }
 }
 
-impl RingCfg {
+impl RingDef {
     /// Parse axis vector
     fn axis(&self) -> Option<Vec3> {
         self.axis.as_ref().map(|axis| {
@@ -277,12 +293,12 @@ impl RingCfg {
     }
 }
 
-impl TryFrom<&ModelCfg> for Model {
+impl TryFrom<&ModelDef> for Model {
     type Error = &'static str;
 
-    fn try_from(cfg: &ModelCfg) -> Result<Self, Self::Error> {
+    fn try_from(def: &ModelDef) -> Result<Self, Self::Error> {
         let mut model = Model::new();
-        for ring in &cfg.ring {
+        for ring in &def.ring {
             if let Some(branch) = &ring.branch {
                 model.add_branch(branch, ring.axis());
             }

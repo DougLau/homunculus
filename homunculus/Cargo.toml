@@ -15,3 +15,6 @@ serde_derive = "1.0"
 serde_json = "1.0"
 serde_repr = "0.1"
 thiserror = "1"
+
+[dev-dependencies]
+muon-rs = "0.2"
