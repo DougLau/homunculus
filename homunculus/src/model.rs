@@ -111,19 +111,6 @@ pub struct Model {
     branches: HashMap<String, Vec<[usize; 2]>>,
 }
 
-impl Default for Ring {
-    fn default() -> Self {
-        Ring {
-            id: 0,
-            center: Vec3::new(0.0, 0.0, 0.0),
-            axis: None,
-            point_defs: vec![],
-            scale: None,
-            smoothing: None,
-        }
-    }
-}
-
 impl TryFrom<&RingCfg> for Ring {
     type Error = &'static str;
 
@@ -137,10 +124,23 @@ impl TryFrom<&RingCfg> for Ring {
     }
 }
 
+impl Default for Ring {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ring {
     /// Create a new ring
     pub fn new() -> Self {
-        Self::default()
+        Ring {
+            id: 0,
+            center: Vec3::new(0.0, 0.0, 0.0),
+            axis: None,
+            point_defs: vec![],
+            scale: None,
+            smoothing: None,
+        }
     }
 
     /// Get the ring axis
@@ -273,6 +273,12 @@ impl TryFrom<&ModelCfg> for Model {
     }
 }
 
+impl Default for Model {
+    fn default() -> Self {
+        Model::new()
+    }
+}
+
 impl Model {
     /// Create a new 3D model
     pub fn new() -> Model {
@@ -351,8 +357,7 @@ impl Model {
             .map(|i| self.builder.vertex(*i))
             .fold(Vec3::ZERO, |a, b| a + b)
             / len as f32;
-        let axis = axis
-            .unwrap_or_else(|| self.branch_axis(branch, center));
+        let axis = axis.unwrap_or_else(|| self.branch_axis(branch, center));
         let pring = Ring {
             id,
             center,
