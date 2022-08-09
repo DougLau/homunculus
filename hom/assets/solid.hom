@@ -3,7 +3,7 @@ ring:
   scale: 1.5
   smoothing: flat
 ring:
-  points: . 0.1 . . . .
+  points: 1 0.1 1 1 1 1
   scale: 1.0
 ring:
   points: 1 * 5

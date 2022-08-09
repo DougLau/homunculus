@@ -99,10 +99,7 @@ pub struct Model {
     builder: MeshBuilder,
 
     /// Current ring
-    ring: Ring,
-
-    /// Previous ring
-    pring: Option<Ring>,
+    ring: Option<Ring>,
 
     /// All points on mesh
     points: Vec<Point>,
@@ -174,7 +171,7 @@ impl Ring {
     }
 
     /// Update with another ring
-    fn update_with(&mut self, ring: &Self) {
+    fn update_with(mut self, ring: &Self) -> Self {
         if ring.axis.is_some() {
             self.axis = ring.axis;
         }
@@ -187,6 +184,9 @@ impl Ring {
         if ring.smoothing.is_some() {
             self.smoothing = ring.smoothing;
         }
+        self.id += 1;
+        self.center += self.axis();
+        self
     }
 
     /// Add a point
@@ -221,13 +221,7 @@ impl FromStr for PtDef {
     fn from_str(code: &str) -> Result<Self, Self::Err> {
         match code.parse::<f32>() {
             Ok(pt) => Ok(PtDef::Distance(pt)),
-            Err(_) => {
-                if code == "." {
-                    Ok(PtDef::Distance(1.0))
-                } else {
-                    Ok(PtDef::Branch(code.into()))
-                }
-            }
+            Err(_) => Ok(PtDef::Branch(code.into())),
         }
     }
 }
@@ -292,7 +286,7 @@ impl TryFrom<&ModelCfg> for Model {
             if let Some(branch) = &ring.branch {
                 model.add_branch(branch, ring.axis());
             }
-            model.add_ring(&ring.try_into().unwrap());
+            model.add_ring(ring.try_into().unwrap());
         }
         Ok(model)
     }
@@ -308,20 +302,27 @@ impl Model {
     /// Create a new 3D model
     pub fn new() -> Model {
         let builder = Mesh::builder();
-        let ring = Ring::new();
         let points = vec![];
         let branches = HashMap::new();
         Model {
             builder,
-            ring,
-            pring: None,
+            ring: None,
             points,
             branches,
         }
     }
 
+    /// Get the current ring ID
+    fn ring_id(&self) -> usize {
+        match &self.ring {
+            Some(ring) => ring.id,
+            None => 0,
+        }
+    }
+
     /// Push one point
-    fn push_pt(&mut self, order_deg: usize, ring_id: usize, pt_type: PtType) {
+    fn push_pt(&mut self, order_deg: usize, pt_type: PtType) {
+        let ring_id = self.ring_id();
         self.points.push(Point {
             order_deg,
             ring_id,
@@ -338,34 +339,32 @@ impl Model {
             match ptd {
                 PtDef::Distance(dist) => {
                     let vid = self.builder.vertices();
-                    self.push_pt(order_deg, ring.id, PtType::Vertex(vid));
+                    self.push_pt(order_deg, PtType::Vertex(vid));
                     let rot = Quat::from_axis_angle(axis, angle)
                         * orthonormal_zero(axis);
                     let dist = dist * ring.scale();
                     let vtx = ring.center + rot * dist;
                     self.builder.push_vtx(vtx);
                 }
-                PtDef::Branch(branch) => self.push_pt(
-                    order_deg,
-                    ring.id,
-                    PtType::Branch(branch.into()),
-                ),
+                PtDef::Branch(branch) => {
+                    self.push_pt(order_deg, PtType::Branch(branch.into()))
+                }
             }
         }
     }
 
     /// Add a ring
-    pub fn add_ring(&mut self, aring: &Ring) {
-        let mut ring = self.ring.clone();
-        ring.update_with(aring);
+    pub fn add_ring(&mut self, ring: Ring) {
+        let pring = self.ring.take();
+        let ring = match &pring {
+            Some(pr) => pr.clone().update_with(&ring),
+            None => ring,
+        };
+        self.ring = Some(ring.clone());
         self.add_ring_points(&ring);
-        if let Some(pring) = self.pring.take() {
-            self.make_band(&ring, &pring);
+        if let Some(pring) = &pring {
+            self.make_band(pring, &ring);
         }
-        self.pring = Some(ring.clone());
-        ring.id += 1;
-        ring.center += ring.axis();
-        self.ring = ring;
     }
 
     /// Add a branch base ring
@@ -375,7 +374,7 @@ impl Model {
         if vertices.is_empty() {
             panic!("Unknown branch");
         }
-        let id = self.ring.id;
+        let id = self.ring_id() + 1;
         let len = vertices.len();
         let center = vertices
             .iter()
@@ -383,20 +382,17 @@ impl Model {
             .fold(Vec3::ZERO, |a, b| a + b)
             / len as f32;
         let axis = axis.unwrap_or_else(|| self.branch_axis(branch, center));
-        let pring = Ring {
+        let ring = Ring {
             id,
             center,
             axis: Some(axis),
             point_defs: vec![PtDef::Distance(1.0); len],
             ..Default::default()
         };
+        self.ring = Some(ring);
         for (order_deg, vid) in self.branch_angles(branch, axis, center) {
-            self.push_pt(order_deg, id, PtType::Vertex(vid));
+            self.push_pt(order_deg, PtType::Vertex(vid));
         }
-        self.ring.axis = Some(axis);
-        self.ring.center = center + axis.normalize() / 2.0;
-        self.ring.id += 1;
-        self.pring = Some(pring);
     }
 
     /// Get all vertices on a branch base
@@ -505,7 +501,7 @@ impl Model {
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&pt0, &pt1, &pt], ring0.smoothing());
+            self.add_face([&pt1, &pt0, &pt], ring0.smoothing());
             if pt.ring_id == ring0.id {
                 pt0 = pt;
             } else {
@@ -513,8 +509,8 @@ impl Model {
             }
         }
         // connect with first vertices on band
-        self.add_face([&pt0, &pt1, &first1], ring0.smoothing());
-        self.add_face([&first1, &first0, &pt0], ring0.smoothing());
+        self.add_face([&pt1, &pt0, &first1], ring0.smoothing());
+        self.add_face([&first0, &first1, &pt0], ring0.smoothing());
     }
 
     /// Add a triangle face
