@@ -2,6 +2,7 @@
 //
 // Copyright (c) 2022  Douglas Lau
 //
+use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
 use crate::plane::Plane;
@@ -125,14 +126,14 @@ pub struct Model {
 }
 
 impl TryFrom<&RingDef> for Ring {
-    type Error = &'static str;
+    type Error = Error;
 
-    fn try_from(def: &RingDef) -> Result<Self, Self::Error> {
+    fn try_from(def: &RingDef) -> Result<Self> {
         let mut ring = Ring::new();
-        *ring.axis_mut() = def.axis();
+        *ring.axis_mut() = def.axis()?;
         *ring.scale_mut() = def.scale;
-        *ring.smoothing_mut() = def.smoothing();
-        ring.point_defs = def.point_defs();
+        *ring.smoothing_mut() = def.smoothing()?;
+        ring.point_defs = def.point_defs()?;
         Ok(ring)
     }
 }
@@ -226,47 +227,53 @@ impl Ring {
     }
 }
 
-/// Parse a point count
-fn parse_count(code: &str) -> usize {
-    code.parse().expect("Invalid count")
-}
-
 impl FromStr for PtDef {
-    type Err = &'static str;
+    type Err = Error;
 
-    fn from_str(code: &str) -> Result<Self, Self::Err> {
+    fn from_str(code: &str) -> Result<Self> {
         match code.parse::<f32>() {
             Ok(pt) => Ok(PtDef::Distance(pt)),
-            Err(_) => Ok(PtDef::Branch(code.into())),
+            Err(_) => {
+                if code.chars().all(char::is_alphanumeric) {
+                    Ok(PtDef::Branch(code.into()))
+                } else {
+                    Err(Error::InvalidBranchLabel(code.into()))
+                }
+            }
         }
     }
 }
 
 impl RingDef {
     /// Parse axis vector
-    fn axis(&self) -> Option<Vec3> {
-        self.axis.as_ref().map(|axis| {
-            let xyz: Vec<_> = axis.split(' ').collect();
-            if xyz.len() == 3 {
-                if let (Ok(x), Ok(y), Ok(z)) = (
-                    xyz[0].parse::<f32>(),
-                    xyz[1].parse::<f32>(),
-                    xyz[2].parse::<f32>(),
-                ) {
-                    return Vec3::new(x, y, z);
+    fn axis(&self) -> Result<Option<Vec3>> {
+        match &self.axis {
+            Some(axis) => {
+                let xyz: Vec<_> = axis.split(' ').collect();
+                if xyz.len() == 3 {
+                    if let (Ok(x), Ok(y), Ok(z)) = (
+                        xyz[0].parse::<f32>(),
+                        xyz[1].parse::<f32>(),
+                        xyz[2].parse::<f32>(),
+                    ) {
+                        return Ok(Some(Vec3::new(x, y, z)));
+                    }
                 }
+                Err(Error::InvalidAxis(axis.into()))
             }
-            panic!("Invalid axis: {axis}");
-        })
+            None => Ok(None),
+        }
     }
 
     /// Get point definitions
-    fn point_defs(&self) -> Vec<PtDef> {
+    fn point_defs(&self) -> Result<Vec<PtDef>> {
         let mut defs = vec![];
         let mut repeat = false;
         for code in &self.points {
             if repeat {
-                let count = parse_count(code);
+                let count = code
+                    .parse()
+                    .map_err(|_| Error::InvalidRepeatCount(code.into()))?;
                 let ptd = defs.last().cloned().unwrap_or(PtDef::Distance(1.0));
                 for _ in 1..count {
                     defs.push(ptd.clone());
@@ -278,31 +285,35 @@ impl RingDef {
                 repeat = true;
                 continue;
             }
-            defs.push(code.parse().expect("Invalid point code"));
+            let def = code
+                .parse()
+                .map_err(|_| Error::InvalidPointDef(code.into()))?;
+            defs.push(def);
         }
-        defs
+        Ok(defs)
     }
 
     /// Get edge smoothing
-    fn smoothing(&self) -> Option<Smoothing> {
+    fn smoothing(&self) -> Result<Option<Smoothing>> {
         match self.smoothing.as_deref() {
-            Some("flat") => Some(Smoothing::Sharp),
-            Some("smooth") => Some(Smoothing::Smooth),
-            _ => None,
+            Some("Sharp") => Ok(Some(Smoothing::Sharp)),
+            Some("Smooth") => Ok(Some(Smoothing::Smooth)),
+            Some(s) => Err(Error::InvalidSmoothing(s.into())),
+            None => Ok(None),
         }
     }
 }
 
 impl TryFrom<&ModelDef> for Model {
-    type Error = &'static str;
+    type Error = Error;
 
-    fn try_from(def: &ModelDef) -> Result<Self, Self::Error> {
+    fn try_from(def: &ModelDef) -> Result<Self> {
         let mut model = Model::new();
         for ring in &def.ring {
             if let Some(branch) = &ring.branch {
-                model.add_branch(branch, ring.axis());
+                model.add_branch(branch, ring.axis()?)?;
             }
-            model.add_ring(ring.try_into().unwrap());
+            model.add_ring(ring.try_into()?)?;
         }
         Ok(model)
     }
@@ -370,7 +381,7 @@ impl Model {
     }
 
     /// Add a ring
-    pub fn add_ring(&mut self, ring: Ring) {
+    pub fn add_ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
         let ring = match &pring {
             Some(pr) => pr.clone().update_with(&ring),
@@ -379,16 +390,21 @@ impl Model {
         self.ring = Some(ring.clone());
         self.add_ring_points(&ring);
         if let Some(pring) = &pring {
-            self.make_band(pring, &ring);
+            self.make_band(pring, &ring)?;
         }
+        Ok(())
     }
 
     /// Add a branch base ring
-    pub fn add_branch(&mut self, branch: &str, axis: Option<Vec3>) {
+    pub fn add_branch(
+        &mut self,
+        branch: &str,
+        axis: Option<Vec3>,
+    ) -> Result<()> {
         // FIXME: add cap to previous ring
         let vertices = self.branch_vertices(branch);
         if vertices.is_empty() {
-            panic!("Unknown branch");
+            return Err(Error::UnknownBranchLabel(branch.into()));
         }
         let id = self.ring_id() + 1;
         let len = vertices.len();
@@ -409,6 +425,7 @@ impl Model {
         for (order_deg, vid) in self.branch_angles(branch, axis, center) {
             self.push_pt(order_deg, PtType::Vertex(vid));
         }
+        Ok(())
     }
 
     /// Get all vertices on a branch base
@@ -503,13 +520,15 @@ impl Model {
     }
 
     /// Make a band of faces between two rings
-    fn make_band(&mut self, ring0: &Ring, ring1: &Ring) {
-        assert_ne!(ring0.id, ring1.id);
+    fn make_band(&mut self, ring0: &Ring, ring1: &Ring) -> Result<()> {
+        if ring0.id == ring1.id {
+            return Err(Error::InvalidRing(ring0.id));
+        }
         // get points for each ring
         let mut pts0 = self.ring_points(ring0, ring1.half_step());
         let mut pts1 = self.ring_points(ring1, ring0.half_step());
-        let first0 = pts0.pop().unwrap();
-        let first1 = pts1.pop().unwrap();
+        let first0 = pts0.pop().ok_or(Error::InvalidRing(ring0.id))?;
+        let first1 = pts1.pop().ok_or(Error::InvalidRing(ring1.id))?;
         pts0.append(&mut pts1);
         pts0.sort();
         pts0.reverse();
@@ -517,7 +536,7 @@ impl Model {
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&pt1, &pt0, &pt], ring0.smoothing());
+            self.add_face([&pt1, &pt0, &pt], ring0.smoothing())?;
             if pt.ring_id == ring0.id {
                 pt0 = pt;
             } else {
@@ -525,12 +544,16 @@ impl Model {
             }
         }
         // connect with first vertices on band
-        self.add_face([&pt1, &pt0, &first1], ring0.smoothing());
-        self.add_face([&first0, &first1, &pt0], ring0.smoothing());
+        self.add_face([&pt1, &pt0, &first1], ring0.smoothing())?;
+        self.add_face([&first0, &first1, &pt0], ring0.smoothing())
     }
 
     /// Add a triangle face
-    fn add_face(&mut self, pts: [&Point; 3], smoothing: Smoothing) {
+    fn add_face(
+        &mut self,
+        pts: [&Point; 3],
+        smoothing: Smoothing,
+    ) -> Result<()> {
         match (&pts[0].pt_type, &pts[1].pt_type, &pts[2].pt_type) {
             (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Vertex(v2)) => {
                 let face = Face::new([*v0, *v1, *v2], smoothing);
@@ -542,7 +565,10 @@ impl Model {
                 if !self.branches.contains_key(b) {
                     self.branches.insert(b.clone(), vec![]);
                 }
-                let edges = self.branches.get_mut(b).unwrap();
+                let edges = self
+                    .branches
+                    .get_mut(b)
+                    .ok_or_else(|| Error::UnknownBranchLabel(b.into()))?;
                 edges.push([*v0, *v1]);
             }
             (PtType::Vertex(_v), PtType::Branch(b0), PtType::Branch(b1))
@@ -551,15 +577,22 @@ impl Model {
                 // A single vertex and two branch points:
                 // - both points must be for the same branch
                 // - no edges need to be added
-                assert_eq!(b0, b1);
+                if b0 != b1 {
+                    return Err(Error::InvalidBranches(b0.into(), b1.into()));
+                }
             }
             (PtType::Branch(b0), PtType::Branch(b1), PtType::Branch(b2)) => {
                 // Three adjacent branch points:
                 // - all points must be for the same branch
-                assert_eq!(b0, b1);
-                assert_eq!(b1, b2);
+                if b0 != b1 {
+                    return Err(Error::InvalidBranches(b0.into(), b1.into()));
+                }
+                if b0 != b2 {
+                    return Err(Error::InvalidBranches(b0.into(), b2.into()));
+                }
             }
         }
+        Ok(())
     }
 
     /// Write model as glTF

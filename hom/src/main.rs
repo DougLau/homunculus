@@ -55,12 +55,11 @@ impl Args {
 fn build_homunculus(path: &Path, stem: &OsStr) -> Result<PathBuf> {
     let file = File::open(path)
         .with_context(|| format!("{} not found", path.display()))?;
-    let def: ModelDef =
-        muon_rs::from_reader(file).context("Invalid homunculus model")?;
+    let def: ModelDef = muon_rs::from_reader(file).context("Invalid model")?;
+    let model = Model::try_from(&def).context("Invalid model")?;
     let out = path.with_file_name(Path::new(stem).with_extension("glb"));
     let writer = File::create(&out)
         .with_context(|| format!("Cannot create {}", out.display()))?;
-    let model = Model::try_from(&def).unwrap();
     model.write_gltf(&writer).context("Writing glTF")?;
     Ok(out)
 }
