@@ -6,6 +6,10 @@
 /// Homunculus errors
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// I/O error
+    #[error("I/O {0}")]
+    Io(#[from] std::io::Error),
+
     /// Invalid Axis
     #[error("Invalid axis: {0}")]
     InvalidAxis(String),

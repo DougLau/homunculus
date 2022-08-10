@@ -115,6 +115,9 @@ pub struct Model {
     /// Mesh builder
     builder: MeshBuilder,
 
+    /// Current ring ID
+    ring_id: usize,
+
     /// Current ring
     ring: Option<Ring>,
 
@@ -201,7 +204,6 @@ impl Ring {
         if ring.smoothing.is_some() {
             self.smoothing = ring.smoothing;
         }
-        self.id += 1;
         self.center += self.axis();
         self
     }
@@ -333,6 +335,7 @@ impl Model {
         let branches = HashMap::new();
         Model {
             builder,
+            ring_id: 0,
             ring: None,
             points,
             branches,
@@ -341,10 +344,7 @@ impl Model {
 
     /// Get the current ring ID
     fn ring_id(&self) -> usize {
-        match &self.ring {
-            Some(ring) => ring.id,
-            None => 0,
-        }
+        self.ring_id
     }
 
     /// Push one point
@@ -383,15 +383,40 @@ impl Model {
     /// Add a ring
     pub fn add_ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
-        let ring = match &pring {
+        let mut ring = match &pring {
             Some(pr) => pr.clone().update_with(&ring),
             None => ring,
         };
+        ring.id = self.ring_id();
         self.ring = Some(ring.clone());
         self.add_ring_points(&ring);
         if let Some(pring) = &pring {
             self.make_band(pring, &ring)?;
         }
+        self.ring_id += 1;
+        Ok(())
+    }
+
+    /// Add a cap
+    fn add_cap(&mut self) -> Result<()> {
+        let mut ring = self.ring.take().unwrap();
+        let mut pts = self.ring_points(&ring, 0);
+        let first = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
+        let vid = self.builder.vertices();
+        let vtx = ring.center;
+        self.builder.push_vtx(vtx);
+        ring.id = self.ring_id();
+        self.ring = Some(ring);
+        self.push_pt(0, PtType::Vertex(vid));
+        let cpt = self.points.last().unwrap().clone();
+        let ring = self.ring.take().unwrap();
+        let mut ppt = first.clone();
+        while let Some(pt) = pts.pop() {
+            self.add_face([&ppt, &pt, &cpt], ring.smoothing())?;
+            ppt = pt;
+        }
+        self.add_face([&ppt, &first, &cpt], ring.smoothing())?;
+        self.ring_id += 1;
         Ok(())
     }
 
@@ -401,12 +426,12 @@ impl Model {
         branch: &str,
         axis: Option<Vec3>,
     ) -> Result<()> {
-        // FIXME: add cap to previous ring
+        self.add_cap()?;
         let vertices = self.branch_vertices(branch);
         if vertices.is_empty() {
             return Err(Error::UnknownBranchLabel(branch.into()));
         }
-        let id = self.ring_id() + 1;
+        let id = self.ring_id();
         let len = vertices.len();
         let center = vertices
             .iter()
@@ -425,6 +450,7 @@ impl Model {
         for (order_deg, vid) in self.branch_angles(branch, axis, center) {
             self.push_pt(order_deg, PtType::Vertex(vid));
         }
+        self.ring_id += 1;
         Ok(())
     }
 
@@ -596,10 +622,11 @@ impl Model {
     }
 
     /// Write model as glTF
-    pub fn write_gltf<W: Write>(self, writer: W) -> std::io::Result<()> {
-        // FIXME: add cap to last ring
+    pub fn write_gltf<W: Write>(mut self, writer: W) -> Result<()> {
+        self.add_cap()?;
         let mesh = self.builder.build();
-        gltf::export(writer, &mesh)
+        gltf::export(writer, &mesh)?;
+        Ok(())
     }
 }
 
