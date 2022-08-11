@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
 use crate::plane::Plane;
-use glam::{Quat, Vec3};
+use glam::{Affine3A, Quat, Vec3, Vec3A};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32::consts::PI;
@@ -51,9 +51,6 @@ enum PtDef {
 pub struct Ring {
     /// Ring ID
     id: usize,
-
-    /// Center point
-    center: Vec3,
 
     /// Axis vector
     axis: Option<Vec3>,
@@ -115,6 +112,9 @@ pub struct Model {
     /// Mesh builder
     builder: MeshBuilder,
 
+    /// Global transform
+    xform: Affine3A,
+
     /// Current ring ID
     ring_id: usize,
 
@@ -152,7 +152,6 @@ impl Ring {
     pub fn new() -> Self {
         Ring {
             id: 0,
-            center: Vec3::new(0.0, 0.0, 0.0),
             axis: None,
             point_defs: vec![],
             scale: None,
@@ -204,13 +203,12 @@ impl Ring {
         if ring.smoothing.is_some() {
             self.smoothing = ring.smoothing;
         }
-        self.center += self.axis();
         self
     }
 
     /// Add a point
-    pub fn add_point(&mut self, point: f32) {
-        self.point_defs.push(PtDef::Distance(point));
+    pub fn add_point(&mut self, dist: f32) {
+        self.point_defs.push(PtDef::Distance(dist));
     }
 
     /// Add a branch point
@@ -234,7 +232,7 @@ impl FromStr for PtDef {
 
     fn from_str(code: &str) -> Result<Self> {
         match code.parse::<f32>() {
-            Ok(pt) => Ok(PtDef::Distance(pt)),
+            Ok(dist) => Ok(PtDef::Distance(dist)),
             Err(_) => {
                 if code.chars().all(char::is_alphanumeric) {
                     Ok(PtDef::Branch(code.into()))
@@ -331,13 +329,13 @@ impl Model {
     /// Create a new 3D model
     pub fn new() -> Model {
         let builder = Mesh::builder();
-        let points = vec![];
         let branches = HashMap::new();
         Model {
             builder,
             ring_id: 0,
+            xform: Affine3A::IDENTITY,
             ring: None,
-            points,
+            points: vec![],
             branches,
         }
     }
@@ -365,13 +363,12 @@ impl Model {
             let order_deg = angle.to_degrees() as usize;
             match ptd {
                 PtDef::Distance(dist) => {
-                    let vid = self.builder.vertices();
-                    self.push_pt(order_deg, PtType::Vertex(vid));
                     let rot = Quat::from_axis_angle(axis, angle)
                         * orthonormal_zero(axis);
-                    let dist = dist * ring.scale();
-                    let vtx = ring.center + rot * dist;
-                    self.builder.push_vtx(vtx);
+                    let pos = rot * (dist * ring.scale());
+                    let pos = self.xform.transform_point3(pos);
+                    let vid = self.builder.push_vtx(pos);
+                    self.push_pt(order_deg, PtType::Vertex(vid));
                 }
                 PtDef::Branch(branch) => {
                     self.push_pt(order_deg, PtType::Branch(branch.into()))
@@ -384,7 +381,11 @@ impl Model {
     pub fn add_ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
         let mut ring = match &pring {
-            Some(pr) => pr.clone().update_with(&ring),
+            Some(pr) => {
+                let ring = pr.clone().update_with(&ring);
+                self.xform.translation += Vec3A::from(ring.axis());
+                ring
+            }
             None => ring,
         };
         ring.id = self.ring_id();
@@ -402,9 +403,8 @@ impl Model {
         let mut ring = self.ring.take().unwrap();
         let mut pts = self.ring_points(&ring, 0);
         let first = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
-        let vid = self.builder.vertices();
-        let vtx = ring.center;
-        self.builder.push_vtx(vtx);
+        let pos = self.xform.transform_point3(Vec3::ZERO);
+        let vid = self.builder.push_vtx(pos);
         ring.id = self.ring_id();
         self.ring = Some(ring);
         self.push_pt(0, PtType::Vertex(vid));
@@ -438,16 +438,16 @@ impl Model {
             .map(|i| self.builder.vertex(*i))
             .fold(Vec3::ZERO, |a, b| a + b)
             / len as f32;
-        let axis = axis.unwrap_or_else(|| self.branch_axis(branch, center));
+        self.xform.translation = Vec3A::from(center);
+        let axis = axis.unwrap_or_else(|| self.branch_axis(branch));
         let ring = Ring {
             id,
-            center,
             axis: Some(axis),
             point_defs: vec![PtDef::Distance(1.0); len],
             ..Default::default()
         };
         self.ring = Some(ring);
-        for (order_deg, vid) in self.branch_angles(branch, axis, center) {
+        for (order_deg, vid) in self.branch_angles(branch, axis) {
             self.push_pt(order_deg, PtType::Vertex(vid));
         }
         self.ring_id += 1;
@@ -471,7 +471,8 @@ impl Model {
     }
 
     /// Calculate axis for a branch base
-    fn branch_axis(&self, branch: &str, center: Vec3) -> Vec3 {
+    fn branch_axis(&self, branch: &str) -> Vec3 {
+        let center = self.xform.transform_point3(Vec3::ZERO);
         match self.branches.get(branch) {
             Some(edges) => {
                 let mut norm = Vec3::ZERO;
@@ -491,8 +492,8 @@ impl Model {
         &self,
         branch: &str,
         axis: Vec3,
-        center: Vec3,
     ) -> Vec<(usize, usize)> {
+        let center = self.xform.transform_point3(Vec3::ZERO);
         match self.branches.get(branch) {
             Some(edges) => {
                 let plane = Plane::new(axis, center);
@@ -502,8 +503,8 @@ impl Model {
                 let mut angle = f32::MAX;
                 for (i, ed) in edges.iter().enumerate() {
                     let vid = ed[0];
-                    let vtx = plane.project_point(self.builder.vertex(vid));
-                    let ang = (zero_deg - center).angle_between(vtx - center);
+                    let pos = plane.project_point(self.builder.vertex(vid));
+                    let ang = (zero_deg - center).angle_between(pos - center);
                     if ang < angle {
                         angle = ang;
                         edge = i;
@@ -513,15 +514,15 @@ impl Model {
                 let vids = edge_vids(edges, edge);
                 // Step 3: make vec of (order_deg, vid)
                 let mut angle = 0.0;
-                let mut pvtx = zero_deg;
+                let mut ppos = zero_deg;
                 let mut angles = vec![];
                 for vid in vids {
-                    let vtx = plane.project_point(self.builder.vertex(vid));
-                    let ang = (pvtx - center).angle_between(vtx - center);
+                    let pos = plane.project_point(self.builder.vertex(vid));
+                    let ang = (ppos - center).angle_between(pos - center);
                     angle += ang;
                     let order_deg = angle.to_degrees() as usize;
                     angles.push((order_deg, vid));
-                    pvtx = vtx;
+                    ppos = pos;
                 }
                 angles
             }

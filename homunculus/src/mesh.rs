@@ -90,11 +90,6 @@ impl MeshBuilder {
         MeshBuilder { pos, faces }
     }
 
-    /// Get count of vertices
-    pub fn vertices(&self) -> usize {
-        self.pos.len()
-    }
-
     /// Get a vertex
     pub fn vertex(&self, idx: usize) -> Vec3 {
         self.pos[idx]
