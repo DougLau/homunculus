@@ -38,6 +38,10 @@ pub enum Error {
     #[error("Invalid smoothing: {0}")]
     InvalidSmoothing(String),
 
+    /// Missing Ring
+    #[error("Missing ring")]
+    MissingRing(),
+
     /// Unknown Branch Label
     #[error("Unknown branch label: {0}")]
     UnknownBranchLabel(String),

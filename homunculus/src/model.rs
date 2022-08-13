@@ -400,7 +400,7 @@ impl Model {
 
     /// Add a cap
     fn add_cap(&mut self) -> Result<()> {
-        let mut ring = self.ring.take().unwrap();
+        let mut ring = self.ring.take().ok_or(Error::MissingRing())?;
         let mut pts = self.ring_points(&ring, 0);
         let first = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
         let pos = self.xform.transform_point3(Vec3::ZERO);
