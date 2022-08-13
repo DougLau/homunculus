@@ -438,7 +438,7 @@ impl Model {
             .map(|i| self.builder.vertex(*i))
             .fold(Vec3::ZERO, |a, b| a + b)
             / len as f32;
-        self.xform.translation = Vec3A::from(center);
+        self.xform = Affine3A::from_translation(center);
         let axis = axis.unwrap_or_else(|| self.branch_axis(branch));
         let ring = Ring {
             id,
@@ -488,46 +488,49 @@ impl Model {
     }
 
     /// Calculate angles for a branch base
-    fn branch_angles(
+    fn branch_angles(&self, branch: &str, axis: Vec3) -> Vec<(usize, usize)> {
+        match self.branches.get(branch) {
+            Some(edges) => self.edge_angles(edges, axis),
+            None => vec![],
+        }
+    }
+
+    /// Calculate edge angles for a branch base
+    fn edge_angles(
         &self,
-        branch: &str,
+        edges: &[[usize; 2]],
         axis: Vec3,
     ) -> Vec<(usize, usize)> {
         let center = self.xform.transform_point3(Vec3::ZERO);
-        match self.branches.get(branch) {
-            Some(edges) => {
-                let plane = Plane::new(axis, center);
-                let zero_deg = center + orthonormal_zero(axis);
-                // Step 1: find "first" edge vertex (closest to 0 degrees)
-                let mut edge = 0;
-                let mut angle = f32::MAX;
-                for (i, ed) in edges.iter().enumerate() {
-                    let vid = ed[0];
-                    let pos = plane.project_point(self.builder.vertex(vid));
-                    let ang = (zero_deg - center).angle_between(pos - center);
-                    if ang < angle {
-                        angle = ang;
-                        edge = i;
-                    }
-                }
-                // Step 2: sort edge vertices by common end-points
-                let vids = edge_vids(edges, edge);
-                // Step 3: make vec of (order_deg, vid)
-                let mut angle = 0.0;
-                let mut ppos = zero_deg;
-                let mut angles = vec![];
-                for vid in vids {
-                    let pos = plane.project_point(self.builder.vertex(vid));
-                    let ang = (ppos - center).angle_between(pos - center);
-                    angle += ang;
-                    let order_deg = angle.to_degrees() as usize;
-                    angles.push((order_deg, vid));
-                    ppos = pos;
-                }
-                angles
+        let plane = Plane::new(axis, center);
+        let zero_deg = center + orthonormal_zero(axis);
+        // Step 1: find "first" edge vertex (closest to 0 degrees)
+        let mut edge = 0;
+        let mut angle = f32::MAX;
+        for (i, ed) in edges.iter().enumerate() {
+            let vid = ed[0];
+            let pos = plane.project_point(self.builder.vertex(vid));
+            let ang = (zero_deg - center).angle_between(pos - center);
+            if ang < angle {
+                angle = ang;
+                edge = i;
             }
-            None => vec![],
         }
+        // Step 2: sort edge vertices by common end-points
+        let vids = edge_vids(edges, edge);
+        // Step 3: make vec of (order_deg, vid)
+        let mut angle = 0.0;
+        let mut ppos = zero_deg;
+        let mut angles = vec![];
+        for vid in vids {
+            let pos = plane.project_point(self.builder.vertex(vid));
+            let ang = (ppos - center).angle_between(pos - center);
+            angle += ang;
+            let order_deg = angle.to_degrees() as usize;
+            angles.push((order_deg, vid));
+            ppos = pos;
+        }
+        angles
     }
 
     /// Get the points for one ring
