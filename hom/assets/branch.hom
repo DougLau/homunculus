@@ -1,0 +1,12 @@
+# Test .hom file with a single branch
+ring:
+  points: 1 * 6
+ring:
+ring:
+  points: a 1 * 5
+ring:
+  points: 1 * 6
+ring:
+  branch: a
+ring:
+ring:

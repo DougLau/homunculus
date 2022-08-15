@@ -5,8 +5,7 @@
 use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
-use crate::plane::Plane;
-use glam::{Affine3A, Quat, Vec3, Vec3A};
+use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32::consts::PI;
@@ -225,6 +224,31 @@ impl Ring {
     fn angle(&self, i: usize) -> f32 {
         2.0 * PI * i as f32 / self.point_defs.len() as f32
     }
+
+    /// Update a transform from ring axis
+    fn update_transform(&mut self, xform: &mut Affine3A) {
+        xform.translation += xform.matrix3.mul_vec3a(Vec3A::from(self.axis()));
+        if let Some(axis) = self.axis {
+            let length = axis.length();
+            let axis = axis.normalize();
+            if axis.x != 0.0 {
+                // project to XY plane, then rotate around Z axis
+                let up = Vec2::new(0.0, 1.0);
+                let proj = Vec2::new(axis.x, axis.y);
+                let angle = up.angle_between(proj) * proj.length();
+                xform.matrix3 *= Mat3A::from_rotation_z(angle);
+            }
+            if axis.z != 0.0 {
+                // project to YZ plane, then rotate around X axis
+                let up = Vec2::new(1.0, 0.0);
+                let proj = Vec2::new(axis.y, axis.z);
+                let angle = up.angle_between(proj) * proj.length();
+                xform.matrix3 *= Mat3A::from_rotation_x(angle);
+            }
+            // adjust axis after rotation applied
+            self.axis = Some(Vec3::new(0.0, length, 0.0));
+        }
+    }
 }
 
 impl FromStr for PtDef {
@@ -357,15 +381,13 @@ impl Model {
 
     /// Add points for a ring
     fn add_ring_points(&mut self, ring: &Ring) {
-        let axis = ring.axis().normalize();
         for (i, ptd) in ring.point_defs.iter().enumerate() {
             let angle = ring.angle(i);
             let order_deg = angle.to_degrees() as usize;
             match ptd {
                 PtDef::Distance(dist) => {
-                    let rot = Quat::from_axis_angle(axis, angle)
-                        * orthonormal_zero(axis);
-                    let pos = rot * (dist * ring.scale());
+                    let rot = Quat::from_rotation_y(angle);
+                    let pos = rot * Vec3::new(dist * ring.scale(), 0.0, 0.0);
                     let pos = self.xform.transform_point3(pos);
                     let vid = self.builder.push_vtx(pos);
                     self.push_pt(order_deg, PtType::Vertex(vid));
@@ -382,8 +404,8 @@ impl Model {
         let pring = self.ring.take();
         let mut ring = match &pring {
             Some(pr) => {
-                let ring = pr.clone().update_with(&ring);
-                self.xform.translation += Vec3A::from(ring.axis());
+                let mut ring = pr.clone().update_with(&ring);
+                ring.update_transform(&mut self.xform);
                 ring
             }
             None => ring,
@@ -440,14 +462,15 @@ impl Model {
             / len as f32;
         self.xform = Affine3A::from_translation(center);
         let axis = axis.unwrap_or_else(|| self.branch_axis(branch));
-        let ring = Ring {
+        let mut ring = Ring {
             id,
             axis: Some(axis),
             point_defs: vec![PtDef::Distance(1.0); len],
             ..Default::default()
         };
+        ring.update_transform(&mut self.xform);
         self.ring = Some(ring);
-        for (order_deg, vid) in self.branch_angles(branch, axis) {
+        for (order_deg, vid) in self.branch_angles(branch) {
             self.push_pt(order_deg, PtType::Vertex(vid));
         }
         self.ring_id += 1;
@@ -479,7 +502,7 @@ impl Model {
                 for edge in edges {
                     let v0 = self.builder.vertex(edge[0]);
                     let v1 = self.builder.vertex(edge[1]);
-                    norm += (center - v0).cross(center - v1);
+                    norm += (v0 - center).cross(v1 - center);
                 }
                 norm.normalize()
             }
@@ -488,28 +511,25 @@ impl Model {
     }
 
     /// Calculate angles for a branch base
-    fn branch_angles(&self, branch: &str, axis: Vec3) -> Vec<(usize, usize)> {
+    fn branch_angles(&self, branch: &str) -> Vec<(usize, usize)> {
         match self.branches.get(branch) {
-            Some(edges) => self.edge_angles(edges, axis),
+            Some(edges) => self.edge_angles(edges),
             None => vec![],
         }
     }
 
     /// Calculate edge angles for a branch base
-    fn edge_angles(
-        &self,
-        edges: &[[usize; 2]],
-        axis: Vec3,
-    ) -> Vec<(usize, usize)> {
+    fn edge_angles(&self, edges: &[[usize; 2]]) -> Vec<(usize, usize)> {
         let center = self.xform.transform_point3(Vec3::ZERO);
-        let plane = Plane::new(axis, center);
-        let zero_deg = center + orthonormal_zero(axis);
+        let inverse = self.xform.inverse();
+        let zero_deg = Vec3::new(0.0, 0.0, 1.0);
         // Step 1: find "first" edge vertex (closest to 0 degrees)
         let mut edge = 0;
         let mut angle = f32::MAX;
         for (i, ed) in edges.iter().enumerate() {
             let vid = ed[0];
-            let pos = plane.project_point(self.builder.vertex(vid));
+            let pos = inverse.transform_point3(self.builder.vertex(vid));
+            let pos = Vec3::new(pos.x, 0.0, pos.z);
             let ang = (zero_deg - center).angle_between(pos - center);
             if ang < angle {
                 angle = ang;
@@ -523,7 +543,8 @@ impl Model {
         let mut ppos = zero_deg;
         let mut angles = vec![];
         for vid in vids {
-            let pos = plane.project_point(self.builder.vertex(vid));
+            let pos = inverse.transform_point3(self.builder.vertex(vid));
+            let pos = Vec3::new(pos.x, 0.0, pos.z);
             let ang = (ppos - center).angle_between(pos - center);
             angle += ang;
             let order_deg = angle.to_degrees() as usize;
@@ -632,19 +653,6 @@ impl Model {
         gltf::export(writer, &mesh)?;
         Ok(())
     }
-}
-
-/// Get the orthonormal to a vector at zero degrees
-///
-/// We don't use `Vec3::any_orthonormal_vector` since the returned vector may
-/// change in a future glam update.
-fn orthonormal_zero(v: Vec3) -> Vec3 {
-    if v.x.abs() > v.y.abs() {
-        Vec3::new(-v.z, 0.0, v.x)
-    } else {
-        Vec3::new(0.0, v.z, -v.y)
-    }
-    .normalize()
 }
 
 /// Get edge vertices sorted by common end-points

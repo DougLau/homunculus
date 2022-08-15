@@ -1,0 +1,13 @@
+# Test .hom file with two slight bends
+ring:
+  points: 1 * 6
+  scale: 0.5
+ring:
+  axis: 0.1 1 0
+ring:
+ring:
+ring:
+  axis: -0.1 1 0.1
+ring:
+ring:
+ring:

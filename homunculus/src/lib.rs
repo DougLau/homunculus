@@ -6,7 +6,6 @@ mod error;
 mod gltf;
 mod mesh;
 mod model;
-mod plane;
 
 pub use error::Error;
 pub use mesh::Smoothing;
