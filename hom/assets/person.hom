@@ -1,0 +1,54 @@
+# Torso
+ring:
+  points: 1 0.6 0.5 0.6 1 0.6 0.5 0.6
+ring:
+ring:
+  points: 1 0.6 0.5 0.6 1 0.7 0.6 0.7
+ring:
+  points: left_arm 0.6 0.5 0.6 right_arm 0.7 0.6 0.7
+# Neck
+ring:
+  axis: 0 0.3 0
+  points: 0.8 0.6 0.5 0.6 0.8 0.9 1 0.9
+  scale: 0.4
+# Head
+ring:
+  axis: 0 0.3 0
+  points: 0.6 0.6 0.5 0.6 0.6 0.9 1 0.9
+  scale: 0.8
+ring:
+  scale: 0.9
+ring:
+  axis: 0 0.4 0
+  points: 0.7 0.6 0.5 0.6 0.7 0.9 1 0.9
+  scale: 0.8
+ring:
+  scale: 0.4
+
+# Left Arm
+ring:
+  branch: left_arm
+  axis: 0 0.05 0
+  points: 1.4 1 * 5
+  scale: 0.4
+ring:
+  axis: 0.4 0.4 0
+  points: 1 * 6
+ring:
+  axis: 0.4 0.4 0
+ring:
+  axis: 0 1 0
+
+# Right Arm
+ring:
+  branch: right_arm
+  axis: 0 0.05 0
+  points: 1 1 1 1.4 1 1
+  scale: 0.4
+ring:
+  axis: -0.4 0.4 0
+  points: 1 * 6
+ring:
+  axis: -0.4 0.4 0
+ring:
+  axis: 0 1 0
