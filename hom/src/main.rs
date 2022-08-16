@@ -46,7 +46,7 @@ impl Args {
                 }
                 Ok(path.into())
             }
-            _ => build_homunculus(&path, &stem),
+            _ => build_homunculus(path, stem),
         }
     }
 }
