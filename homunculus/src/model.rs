@@ -225,9 +225,13 @@ impl Ring {
         2.0 * PI * i as f32 / self.point_defs.len() as f32
     }
 
-    /// Update a transform from ring axis
-    fn update_transform(&mut self, xform: &mut Affine3A) {
+    /// Translate a transform from axis
+    fn transform_translate(&self, xform: &mut Affine3A) {
         xform.translation += xform.matrix3.mul_vec3a(Vec3A::from(self.axis()));
+    }
+
+    /// Rotate a transform from axis
+    fn transform_rotate(&mut self, xform: &mut Affine3A) {
         if let Some(axis) = self.axis {
             let length = axis.length();
             let axis = axis.normalize();
@@ -405,7 +409,8 @@ impl Model {
         let mut ring = match &pring {
             Some(pr) => {
                 let mut ring = pr.clone().update_with(&ring);
-                ring.update_transform(&mut self.xform);
+                ring.transform_translate(&mut self.xform);
+                ring.transform_rotate(&mut self.xform);
                 ring
             }
             None => ring,
@@ -461,14 +466,18 @@ impl Model {
             .fold(Vec3::ZERO, |a, b| a + b)
             / len as f32;
         self.xform = Affine3A::from_translation(center);
-        let axis = axis.unwrap_or_else(|| self.branch_axis(branch));
+        let ax = self.branch_axis(branch);
         let mut ring = Ring {
             id,
-            axis: Some(axis),
+            axis: Some(ax),
             point_defs: vec![PtDef::Distance(1.0); len],
             ..Default::default()
         };
-        ring.update_transform(&mut self.xform);
+        ring.transform_rotate(&mut self.xform);
+        if let Some(axis) = axis {
+            ring.axis = Some(axis);
+            ring.transform_rotate(&mut self.xform);
+        }
         self.ring = Some(ring);
         for (order_deg, vid) in self.branch_angles(branch) {
             self.push_pt(order_deg, PtType::Vertex(vid));
