@@ -27,9 +27,11 @@ ring:
   scale: 0.1
 ring:
   branch: b
+  axis: 0 0.1 0
   points: 1 * 6
   scale: 0.4
 ring:
+  axis: 0 1 0
   points: 1 * 5
   scale: 0.3
 ring:
@@ -41,9 +43,11 @@ ring:
   scale: 0.1
 ring:
   branch: c
+  axis: 0 0.1 0
   points: 1 * 6
   scale: 0.25
 ring:
+  axis: 0 1 0
   points: 1 * 5
   scale: 0.2
 ring:

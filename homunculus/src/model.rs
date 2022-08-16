@@ -106,6 +106,16 @@ pub struct ModelDef {
     ring: Vec<RingDef>,
 }
 
+/// Branch data
+#[derive(Debug)]
+struct Branch {
+    /// Branch connection vertices
+    vertices: Vec<Vec3>,
+
+    /// Branch edges
+    edges: Vec<[usize; 2]>,
+}
+
 /// A 3D model
 pub struct Model {
     /// Mesh builder
@@ -123,8 +133,8 @@ pub struct Model {
     /// All points on mesh
     points: Vec<Point>,
 
-    /// Branches (label to edge vertices mapping)
-    branches: HashMap<String, Vec<[usize; 2]>>,
+    /// Mapping of labels to branches
+    branches: HashMap<String, Branch>,
 }
 
 impl TryFrom<&RingDef> for Ring {
@@ -332,6 +342,52 @@ impl RingDef {
     }
 }
 
+impl Branch {
+    /// Create a new branch
+    fn new() -> Self {
+        Branch {
+            vertices: vec![],
+            edges: vec![],
+        }
+    }
+
+    /// Get edge vertices sorted by common end-points
+    fn edge_vids(&self, edge: usize) -> Vec<usize> {
+        let mut edges = self.edges.to_vec();
+        if edge > 0 {
+            edges.swap(0, edge);
+        }
+        let mut vid = edges[0][1];
+        for i in 1..edges.len() {
+            for j in (i + 1)..edges.len() {
+                if vid == edges[j][0] {
+                    edges.swap(i, j);
+                }
+            }
+            vid = edges[i][1];
+        }
+        edges.into_iter().map(|e| e[0]).collect()
+    }
+
+    /// Get center of branch vertices
+    fn center(&self) -> Vec3 {
+        let len = self.vertices.len() as f32;
+        self.vertices.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
+    }
+
+    /// Get count of vertices on edges
+    fn edge_vertex_count(&self) -> usize {
+        let mut vertices = self
+            .edges
+            .iter()
+            .flat_map(|e| [e[0], e[1]].into_iter())
+            .collect::<Vec<usize>>();
+        vertices.sort();
+        vertices.dedup();
+        vertices.len()
+    }
+}
+
 impl TryFrom<&ModelDef> for Model {
     type Error = Error;
 
@@ -373,6 +429,16 @@ impl Model {
         self.ring_id
     }
 
+    /// Add branch vertex
+    fn add_branch_vertex(&mut self, branch: &str, pos: Vec3) {
+        if !self.branches.contains_key(branch) {
+            self.branches.insert(branch.to_string(), Branch::new());
+        }
+        // unwrap can never panic because of contains_key test
+        let branch = self.branches.get_mut(branch).unwrap();
+        branch.vertices.push(pos);
+    }
+
     /// Push one point
     fn push_pt(&mut self, order_deg: usize, pt_type: PtType) {
         let ring_id = self.ring_id();
@@ -388,15 +454,18 @@ impl Model {
         for (i, ptd) in ring.point_defs.iter().enumerate() {
             let angle = ring.angle(i);
             let order_deg = angle.to_degrees() as usize;
+            let rot = Quat::from_rotation_y(angle);
             match ptd {
                 PtDef::Distance(dist) => {
-                    let rot = Quat::from_rotation_y(angle);
                     let pos = rot * Vec3::new(dist * ring.scale(), 0.0, 0.0);
                     let pos = self.xform.transform_point3(pos);
                     let vid = self.builder.push_vtx(pos);
                     self.push_pt(order_deg, PtType::Vertex(vid));
                 }
                 PtDef::Branch(branch) => {
+                    let pos = rot * Vec3::new(ring.scale(), 0.0, 0.0);
+                    let pos = self.xform.transform_point3(pos);
+                    self.add_branch_vertex(branch, pos);
                     self.push_pt(order_deg, PtType::Branch(branch.into()))
                 }
             }
@@ -454,17 +523,8 @@ impl Model {
         axis: Option<Vec3>,
     ) -> Result<()> {
         self.add_cap()?;
-        let vertices = self.branch_vertices(branch);
-        if vertices.is_empty() {
-            return Err(Error::UnknownBranchLabel(branch.into()));
-        }
         let id = self.ring_id();
-        let len = vertices.len();
-        let center = vertices
-            .iter()
-            .map(|i| self.builder.vertex(*i))
-            .fold(Vec3::ZERO, |a, b| a + b)
-            / len as f32;
+        let (center, len) = self.branch_center_vertices(branch)?;
         self.xform = Affine3A::from_translation(center);
         let ax = self.branch_axis(branch);
         let mut ring = Ring {
@@ -486,19 +546,15 @@ impl Model {
         Ok(())
     }
 
-    /// Get all vertices on a branch base
-    fn branch_vertices(&self, branch: &str) -> Vec<usize> {
+    /// Get center of a branch base
+    fn branch_center_vertices(&self, branch: &str) -> Result<(Vec3, usize)> {
         match self.branches.get(branch) {
-            Some(edges) => {
-                let mut vertices = edges
-                    .iter()
-                    .flat_map(|e| [e[0], e[1]].into_iter())
-                    .collect::<Vec<usize>>();
-                vertices.sort();
-                vertices.dedup();
-                vertices
+            Some(branch) => {
+                let center = branch.center();
+                let count = branch.edge_vertex_count();
+                Ok((center, count))
             }
-            None => vec![],
+            None => Err(Error::UnknownBranchLabel(branch.into())),
         }
     }
 
@@ -506,9 +562,9 @@ impl Model {
     fn branch_axis(&self, branch: &str) -> Vec3 {
         let center = self.xform.transform_point3(Vec3::ZERO);
         match self.branches.get(branch) {
-            Some(edges) => {
+            Some(branch) => {
                 let mut norm = Vec3::ZERO;
-                for edge in edges {
+                for edge in &branch.edges {
                     let v0 = self.builder.vertex(edge[0]);
                     let v1 = self.builder.vertex(edge[1]);
                     norm += (v0 - center).cross(v1 - center);
@@ -522,20 +578,20 @@ impl Model {
     /// Calculate angles for a branch base
     fn branch_angles(&self, branch: &str) -> Vec<(usize, usize)> {
         match self.branches.get(branch) {
-            Some(edges) => self.edge_angles(edges),
+            Some(branch) => self.edge_angles(branch),
             None => vec![],
         }
     }
 
     /// Calculate edge angles for a branch base
-    fn edge_angles(&self, edges: &[[usize; 2]]) -> Vec<(usize, usize)> {
+    fn edge_angles(&self, branch: &Branch) -> Vec<(usize, usize)> {
         let center = self.xform.transform_point3(Vec3::ZERO);
         let inverse = self.xform.inverse();
         let zero_deg = Vec3::new(0.0, 0.0, 1.0);
         // Step 1: find "first" edge vertex (closest to 0 degrees)
         let mut edge = 0;
         let mut angle = f32::MAX;
-        for (i, ed) in edges.iter().enumerate() {
+        for (i, ed) in branch.edges.iter().enumerate() {
             let vid = ed[0];
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
@@ -546,7 +602,7 @@ impl Model {
             }
         }
         // Step 2: sort edge vertices by common end-points
-        let vids = edge_vids(edges, edge);
+        let vids = branch.edge_vids(edge);
         // Step 3: make vec of (order_deg, vid)
         let mut angle = 0.0;
         let mut ppos = zero_deg;
@@ -622,14 +678,11 @@ impl Model {
             (PtType::Branch(b), PtType::Vertex(v0), PtType::Vertex(v1))
             | (PtType::Vertex(v1), PtType::Branch(b), PtType::Vertex(v0))
             | (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Branch(b)) => {
-                if !self.branches.contains_key(b) {
-                    self.branches.insert(b.clone(), vec![]);
-                }
-                let edges = self
+                let branch = self
                     .branches
                     .get_mut(b)
                     .ok_or_else(|| Error::UnknownBranchLabel(b.into()))?;
-                edges.push([*v0, *v1]);
+                branch.edges.push([*v0, *v1]);
             }
             (PtType::Vertex(_v), PtType::Branch(b0), PtType::Branch(b1))
             | (PtType::Branch(b0), PtType::Vertex(_v), PtType::Branch(b1))
@@ -662,22 +715,4 @@ impl Model {
         gltf::export(writer, &mesh)?;
         Ok(())
     }
-}
-
-/// Get edge vertices sorted by common end-points
-fn edge_vids(edges: &[[usize; 2]], edge: usize) -> Vec<usize> {
-    let mut edges = edges.to_vec();
-    if edge > 0 {
-        edges.swap(0, edge);
-    }
-    let mut vid = edges[0][1];
-    for i in 1..edges.len() {
-        for j in (i + 1)..edges.len() {
-            if vid == edges[j][0] {
-                edges.swap(i, j);
-            }
-        }
-        vid = edges[i][1];
-    }
-    edges.into_iter().map(|e| e[0]).collect()
 }
