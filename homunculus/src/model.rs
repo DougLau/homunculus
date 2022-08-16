@@ -272,7 +272,7 @@ impl FromStr for PtDef {
         match code.parse::<f32>() {
             Ok(dist) => Ok(PtDef::Distance(dist)),
             Err(_) => {
-                if code.chars().all(char::is_alphanumeric) {
+                if code.chars().all(|c| c.is_alphanumeric() || c == '_') {
                     Ok(PtDef::Branch(code.into()))
                 } else {
                     Err(Error::InvalidBranchLabel(code.into()))
@@ -585,9 +585,8 @@ impl Model {
 
     /// Calculate edge angles for a branch base
     fn edge_angles(&self, branch: &Branch) -> Vec<(usize, usize)> {
-        let center = self.xform.transform_point3(Vec3::ZERO);
         let inverse = self.xform.inverse();
-        let zero_deg = Vec3::new(0.0, 0.0, 1.0);
+        let zero_deg = Vec3::new(1.0, 0.0, 0.0);
         // Step 1: find "first" edge vertex (closest to 0 degrees)
         let mut edge = 0;
         let mut angle = f32::MAX;
@@ -595,7 +594,7 @@ impl Model {
             let vid = ed[0];
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
-            let ang = (zero_deg - center).angle_between(pos - center);
+            let ang = zero_deg.angle_between(pos);
             if ang < angle {
                 angle = ang;
                 edge = i;
@@ -610,7 +609,7 @@ impl Model {
         for vid in vids {
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
-            let ang = (ppos - center).angle_between(pos - center);
+            let ang = ppos.angle_between(pos);
             angle += ang;
             let order_deg = angle.to_degrees() as usize;
             angles.push((order_deg, vid));
