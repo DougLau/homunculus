@@ -3,7 +3,7 @@
 // Copyright (c) 2022  Douglas Lau
 //
 use bevy::{
-    asset::{AssetServerSettings, LoadState},
+    asset::LoadState,
     gltf::Gltf,
     input::mouse::{MouseMotion, MouseWheel},
     math::Vec3A,
@@ -15,6 +15,7 @@ use std::f32::consts::PI;
 use std::path::PathBuf;
 
 /// Path configuration resource for glTF
+#[derive(Resource)]
 struct PathConfig {
     path: PathBuf,
 }
@@ -30,6 +31,7 @@ enum SceneState {
 }
 
 /// Scene resource data
+#[derive(Resource)]
 struct SceneRes {
     handle: Handle<Gltf>,
     id: Option<InstanceId>,
@@ -98,29 +100,35 @@ impl CameraController {
 /// View glTF in an app window
 pub fn view_gltf(folder: String, path: PathBuf) {
     let mut app = App::new();
-    app.insert_resource(WindowDescriptor {
-        title: "homunculus".to_string(),
-        ..default()
-    })
-    .insert_resource(PathConfig { path })
-    .insert_resource(AssetServerSettings {
-        asset_folder: folder,
-        watch_for_changes: true,
-    })
-    .insert_resource(AmbientLight {
-        color: Color::WHITE,
-        brightness: 0.5,
-    })
-    .add_plugins(DefaultPlugins)
-    .add_startup_system(start_loading)
-    .add_system(spawn_scene)
-    .add_system(check_ready)
-    .add_system(setup_camera_and_light)
-    .add_system(start_animation)
-    .add_system(control_animation)
-    .add_system(update_camera)
-    .add_system(update_light_direction)
-    .run();
+    app.insert_resource(PathConfig { path })
+        .insert_resource(AmbientLight {
+            color: Color::WHITE,
+            brightness: 0.5,
+        })
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    asset_folder: folder,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        title: "homunculus".to_string(),
+                        ..default()
+                    },
+                    ..default()
+                }),
+        )
+        .add_startup_system(start_loading)
+        .add_system(spawn_scene)
+        .add_system(check_ready)
+        .add_system(setup_camera_and_light)
+        .add_system(start_animation)
+        .add_system(control_animation)
+        .add_system(update_camera)
+        .add_system(update_light_direction)
+        .run();
 }
 
 /// System to start loading scene
@@ -182,10 +190,10 @@ fn setup_camera_and_light(
     scene_res.state = SceneState::Setup;
     let aabb = bounding_box_meshes(query);
     let (bundle, controller) = build_camera(aabb.clone());
-    commands.spawn_bundle(bundle).insert(controller);
+    commands.spawn(bundle).insert(controller);
     let min = aabb.min();
     let max = aabb.max();
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             shadow_projection: OrthographicProjection {
                 left: min.x,
@@ -202,7 +210,7 @@ fn setup_camera_and_light(
         ..default()
     });
     let size = (max.x - min.x).max(max.z - min.z);
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size })),
         material: materials.add(StandardMaterial {
             base_color: Color::DARK_GREEN,
@@ -221,7 +229,7 @@ fn bounding_box_meshes(
     let mut max = Vec3A::splat(f32::MIN);
     for (xform, aabb) in &query {
         let aabb = Aabb::from(Sphere {
-            center: Vec3A::from(xform.mul_vec3(aabb.center.into())),
+            center: Vec3A::from(xform.transform_point(aabb.center.into())),
             radius: xform.radius_vec3a(aabb.half_extents),
         });
         min = min.min(aabb.min());
