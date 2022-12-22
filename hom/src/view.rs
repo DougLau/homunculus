@@ -110,7 +110,6 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                 .set(AssetPlugin {
                     watch_for_changes: true,
                     asset_folder: folder,
-                    ..default()
                 })
                 .set(WindowPlugin {
                     window: WindowDescriptor {
@@ -337,10 +336,11 @@ fn update_camera(
 /// Get the size of the primary window
 fn primary_window_size(windows: &Res<Windows>) -> Vec2 {
     let window = windows.get_primary().unwrap();
-    Vec2::new(window.width() as f32, window.height() as f32)
+    Vec2::new(window.width(), window.height())
 }
 
 /// System to update the directional light
+#[allow(clippy::type_complexity)]
 fn update_light_direction(
     mouse: Res<Input<MouseButton>>,
     mut queries: ParamSet<(
