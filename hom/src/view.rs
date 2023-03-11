@@ -1,6 +1,6 @@
 // view.rs      View module
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022-2023  Douglas Lau
 //
 use bevy::{
     asset::LoadState,
@@ -10,6 +10,7 @@ use bevy::{
     prelude::*,
     render::primitives::{Aabb, Sphere},
     scene::InstanceId,
+    window::{PrimaryWindow, Window},
 };
 use std::f32::consts::PI;
 use std::path::PathBuf;
@@ -112,10 +113,10 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                     asset_folder: folder,
                 })
                 .set(WindowPlugin {
-                    window: WindowDescriptor {
+                    primary_window: Some(Window {
                         title: "homunculus".to_string(),
                         ..default()
-                    },
+                    }),
                     ..default()
                 }),
         )
@@ -194,15 +195,6 @@ fn setup_camera_and_light(
     let max = aabb.max();
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            shadow_projection: OrthographicProjection {
-                left: min.x,
-                right: max.x,
-                bottom: min.y,
-                top: max.y,
-                near: min.z,
-                far: 2.0 * max.z,
-                ..default()
-            },
             shadows_enabled: true,
             ..default()
         },
@@ -210,7 +202,7 @@ fn setup_camera_and_light(
     });
     let size = (max.x - min.x).max(max.z - min.z);
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size })),
+        mesh: meshes.add(Mesh::from(shape::Plane::from_size(size))),
         material: materials.add(StandardMaterial {
             base_color: Color::DARK_GREEN,
             perceptual_roughness: 1.0,
@@ -295,7 +287,7 @@ fn control_animation(
 
 /// System to update the camera
 fn update_camera(
-    windows: Res<Windows>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     mouse: Res<Input<MouseButton>>,
@@ -313,7 +305,7 @@ fn update_camera(
             motion += ev.delta;
         }
         if motion.length_squared() > 0.0 {
-            let win_sz = primary_window_size(&windows);
+            let win_sz = primary_window_size(windows);
             if keyboard.pressed(KeyCode::LShift)
                 || keyboard.pressed(KeyCode::RShift)
             {
@@ -334,8 +326,8 @@ fn update_camera(
 }
 
 /// Get the size of the primary window
-fn primary_window_size(windows: &Res<Windows>) -> Vec2 {
-    let window = windows.get_primary().unwrap();
+fn primary_window_size(windows: Query<&Window, With<PrimaryWindow>>) -> Vec2 {
+    let window = windows.get_single().unwrap();
     Vec2::new(window.width(), window.height())
 }
 
