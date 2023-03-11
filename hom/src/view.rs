@@ -189,7 +189,7 @@ fn setup_camera_and_light(
     }
     scene_res.state = SceneState::Setup;
     let aabb = bounding_box_meshes(query);
-    let (bundle, controller) = build_camera(aabb.clone());
+    let (bundle, controller) = build_camera(aabb);
     commands.spawn(bundle).insert(controller);
     let min = aabb.min();
     let max = aabb.max();
