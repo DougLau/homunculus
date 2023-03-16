@@ -1,6 +1,6 @@
 // model.rs     Model module
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022-2023  Douglas Lau
 //
 use crate::error::{Error, Result};
 use crate::gltf;
@@ -106,6 +106,10 @@ pub struct ModelDef {
     ring: Vec<RingDef>,
 }
 
+/// Model edge between two vertices
+#[derive(Clone, Debug)]
+struct Edge(usize, usize);
+
 /// Branch data
 #[derive(Debug)]
 struct Branch {
@@ -113,7 +117,7 @@ struct Branch {
     vertices: Vec<Vec3>,
 
     /// Branch edges
-    edges: Vec<[usize; 2]>,
+    edges: Vec<Edge>,
 }
 
 /// A 3D model
@@ -183,7 +187,7 @@ impl Ring {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Set mutable scale
+    /// Get ring scale mutably
     pub fn scale_mut(&mut self) -> &mut Option<f32> {
         &mut self.scale
     }
@@ -357,16 +361,16 @@ impl Branch {
         if edge > 0 {
             edges.swap(0, edge);
         }
-        let mut vid = edges[0][1];
+        let mut vid = edges[0].1;
         for i in 1..edges.len() {
             for j in (i + 1)..edges.len() {
-                if vid == edges[j][0] {
+                if vid == edges[j].0 {
                     edges.swap(i, j);
                 }
             }
-            vid = edges[i][1];
+            vid = edges[i].1;
         }
-        edges.into_iter().map(|e| e[0]).collect()
+        edges.into_iter().map(|e| e.0).collect()
     }
 
     /// Get center of branch vertices
@@ -380,7 +384,7 @@ impl Branch {
         let mut vertices = self
             .edges
             .iter()
-            .flat_map(|e| [e[0], e[1]].into_iter())
+            .flat_map(|e| [e.0, e.1].into_iter())
             .collect::<Vec<usize>>();
         vertices.sort();
         vertices.dedup();
@@ -565,8 +569,8 @@ impl Model {
             Some(branch) => {
                 let mut norm = Vec3::ZERO;
                 for edge in &branch.edges {
-                    let v0 = self.builder.vertex(edge[0]);
-                    let v1 = self.builder.vertex(edge[1]);
+                    let v0 = self.builder.vertex(edge.0);
+                    let v1 = self.builder.vertex(edge.1);
                     norm += (v0 - center).cross(v1 - center);
                 }
                 norm.normalize()
@@ -591,7 +595,7 @@ impl Model {
         let mut edge = 0;
         let mut angle = f32::MAX;
         for (i, ed) in branch.edges.iter().enumerate() {
-            let vid = ed[0];
+            let vid = ed.0;
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
             let ang = zero_deg.angle_between(pos);
@@ -681,7 +685,7 @@ impl Model {
                     .branches
                     .get_mut(b)
                     .ok_or_else(|| Error::UnknownBranchLabel(b.into()))?;
-                branch.edges.push([*v0, *v1]);
+                branch.edges.push(Edge(*v0, *v1));
             }
             (PtType::Vertex(_v), PtType::Branch(b0), PtType::Branch(b1))
             | (PtType::Branch(b0), PtType::Vertex(_v), PtType::Branch(b1))
