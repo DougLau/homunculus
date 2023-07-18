@@ -3,13 +3,14 @@
 // Copyright (c) 2022-2023  Douglas Lau
 //
 use bevy::{
-    asset::LoadState,
+    asset::{ChangeWatcher, LoadState},
     gltf::Gltf,
     input::mouse::{MouseMotion, MouseWheel},
     math::Vec3A,
     prelude::*,
     render::primitives::{Aabb, Sphere},
     scene::InstanceId,
+    utils::Duration,
     window::{PrimaryWindow, Window},
 };
 use std::f32::consts::PI;
@@ -109,7 +110,9 @@ pub fn view_gltf(folder: String, path: PathBuf) {
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
-                    watch_for_changes: true,
+                    watch_for_changes: ChangeWatcher::with_delay(
+                        Duration::from_millis(200),
+                    ),
                     asset_folder: folder,
                 })
                 .set(WindowPlugin {
@@ -120,14 +123,19 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                     ..default()
                 }),
         )
-        .add_startup_system(start_loading)
-        .add_system(spawn_scene)
-        .add_system(check_ready)
-        .add_system(setup_camera_and_light)
-        .add_system(start_animation)
-        .add_system(control_animation)
-        .add_system(update_camera)
-        .add_system(update_light_direction)
+        .add_systems(Startup, start_loading)
+        .add_systems(
+            Update,
+            (
+                spawn_scene,
+                check_ready,
+                setup_camera_and_light,
+                start_animation,
+                control_animation,
+                update_camera,
+                update_light_direction,
+            ),
+        )
         .run();
 }
 
@@ -306,8 +314,8 @@ fn update_camera(
         }
         if motion.length_squared() > 0.0 {
             let win_sz = primary_window_size(windows);
-            if keyboard.pressed(KeyCode::LShift)
-                || keyboard.pressed(KeyCode::RShift)
+            if keyboard.pressed(KeyCode::ShiftLeft)
+                || keyboard.pressed(KeyCode::ShiftRight)
             {
                 controller.pan(&mut transform, motion, win_sz);
             } else {

@@ -1,12 +1,12 @@
 [package]
 name = "homunculus"
-version = "0.3.0"
 description = "Experimental 3D modeling library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DougLau/homunculus/tree/main/homunculus"
 readme = "README.md"
 keywords = ["3D", "modeling", "gltf"]
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 glam = { version = "0.20", features = ["serde"] }

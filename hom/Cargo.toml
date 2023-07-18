@@ -1,16 +1,16 @@
 [package]
 name = "hom"
-version = "0.3.1"
 description = "Experimental 3D modeling program"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DougLau/homunculus/tree/main/hom"
 readme = "README.md"
 keywords = ["3D", "modeling", "gltf"]
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 anyhow = "1.0"
 argh = "0.1"
 homunculus = "0.3"
 muon-rs = "0.2"
-bevy = "0.10.0"
+bevy = "0.11"
