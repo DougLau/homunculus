@@ -1,6 +1,6 @@
 // lib.rs      homunculus crate.
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022-2023  Douglas Lau
 //
 mod error;
 mod gltf;
@@ -9,4 +9,4 @@ mod model;
 
 pub use error::Error;
 pub use mesh::Smoothing;
-pub use model::{Model, ModelDef, Ring};
+pub use model::{Model, Ring};

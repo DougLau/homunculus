@@ -1,12 +1,14 @@
 // main.rs      hom program
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022-2023  Douglas Lau
 //
+mod model;
 mod view;
 
+use crate::model::ModelDef;
 use anyhow::{Context, Result};
 use argh::FromArgs;
-use homunculus::{Model, ModelDef};
+use homunculus::Model;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -28,7 +30,7 @@ fn main() -> Result<()> {
     let args: Args = argh::from_env();
     let path = args.build_model()?;
     if args.view {
-        let folder = std::env::current_dir().unwrap().display().to_string();
+        let folder = std::env::current_dir()?.display().to_string();
         view::view_gltf(folder, path);
     }
     Ok(())

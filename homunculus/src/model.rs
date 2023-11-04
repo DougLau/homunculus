@@ -6,7 +6,6 @@ use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
 use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
-use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::io::Write;
@@ -64,48 +63,6 @@ pub struct Ring {
     smoothing: Option<Smoothing>,
 }
 
-/// Ring definition
-#[derive(Debug, Deserialize, Serialize)]
-pub struct RingDef {
-    /// Ring branch label
-    branch: Option<String>,
-
-    /// Axis vector
-    axis: Option<String>,
-
-    /// Point limits
-    points: Vec<String>,
-
-    /// Scale factor
-    scale: Option<f32>,
-
-    /// Smoothing setting
-    smoothing: Option<String>,
-}
-
-/// Definition of a 3D model
-///
-/// It can be serialized or deserialized using any [serde] compatible data
-/// format.
-///
-/// After deserializing, a [Model] can be created using `TryFrom`:
-///
-/// ```rust,no_run
-/// # use std::fs::File;
-/// # use homunculus::{Model, ModelDef};
-/// let file = File::open("model.hom").unwrap();
-/// let def: ModelDef = muon_rs::from_reader(file).unwrap();
-/// let model = Model::try_from(&def).unwrap();
-/// ```
-///
-/// [model]: struct.Model.html
-/// [serde]: https://serde.rs/
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ModelDef {
-    /// Vec of all rings
-    ring: Vec<RingDef>,
-}
-
 /// Model edge between two vertices
 #[derive(Clone, Debug)]
 struct Edge(usize, usize);
@@ -139,19 +96,6 @@ pub struct Model {
 
     /// Mapping of labels to branches
     branches: HashMap<String, Branch>,
-}
-
-impl TryFrom<&RingDef> for Ring {
-    type Error = Error;
-
-    fn try_from(def: &RingDef) -> Result<Self> {
-        let mut ring = Ring::new();
-        *ring.axis_mut() = def.axis()?;
-        *ring.scale_mut() = def.scale;
-        *ring.smoothing_mut() = def.smoothing()?;
-        ring.point_defs = def.point_defs()?;
-        Ok(ring)
-    }
 }
 
 impl Default for Ring {
@@ -286,66 +230,6 @@ impl FromStr for PtDef {
     }
 }
 
-impl RingDef {
-    /// Parse axis vector
-    fn axis(&self) -> Result<Option<Vec3>> {
-        match &self.axis {
-            Some(axis) => {
-                let xyz: Vec<_> = axis.split(' ').collect();
-                if xyz.len() == 3 {
-                    if let (Ok(x), Ok(y), Ok(z)) = (
-                        xyz[0].parse::<f32>(),
-                        xyz[1].parse::<f32>(),
-                        xyz[2].parse::<f32>(),
-                    ) {
-                        return Ok(Some(Vec3::new(x, y, z)));
-                    }
-                }
-                Err(Error::InvalidAxis(axis.into()))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Get point definitions
-    fn point_defs(&self) -> Result<Vec<PtDef>> {
-        let mut defs = vec![];
-        let mut repeat = false;
-        for code in &self.points {
-            if repeat {
-                let count = code
-                    .parse()
-                    .map_err(|_| Error::InvalidRepeatCount(code.into()))?;
-                let ptd = defs.last().cloned().unwrap_or(PtDef::Distance(1.0));
-                for _ in 1..count {
-                    defs.push(ptd.clone());
-                }
-                repeat = false;
-                continue;
-            }
-            if code == "*" {
-                repeat = true;
-                continue;
-            }
-            let def = code
-                .parse()
-                .map_err(|_| Error::InvalidPointDef(code.into()))?;
-            defs.push(def);
-        }
-        Ok(defs)
-    }
-
-    /// Get edge smoothing
-    fn smoothing(&self) -> Result<Option<Smoothing>> {
-        match self.smoothing.as_deref() {
-            Some("Sharp") => Ok(Some(Smoothing::Sharp)),
-            Some("Smooth") => Ok(Some(Smoothing::Smooth)),
-            Some(s) => Err(Error::InvalidSmoothing(s.into())),
-            None => Ok(None),
-        }
-    }
-}
-
 impl Branch {
     /// Create a new branch
     fn new() -> Self {
@@ -389,21 +273,6 @@ impl Branch {
         vertices.sort();
         vertices.dedup();
         vertices.len()
-    }
-}
-
-impl TryFrom<&ModelDef> for Model {
-    type Error = Error;
-
-    fn try_from(def: &ModelDef) -> Result<Self> {
-        let mut model = Model::new();
-        for ring in &def.ring {
-            if let Some(branch) = &ring.branch {
-                model.add_branch(branch, ring.axis()?)?;
-            }
-            model.add_ring(ring.try_into()?)?;
-        }
-        Ok(model)
     }
 }
 
