@@ -3,14 +3,13 @@
 // Copyright (c) 2022-2023  Douglas Lau
 //
 use bevy::{
-    asset::{ChangeWatcher, LoadState},
+    asset::LoadState,
     gltf::Gltf,
     input::mouse::{MouseMotion, MouseWheel},
     math::Vec3A,
     prelude::*,
     render::primitives::{Aabb, Sphere},
     scene::InstanceId,
-    utils::Duration,
     window::{PrimaryWindow, Window},
 };
 use std::f32::consts::PI;
@@ -110,10 +109,8 @@ pub fn view_gltf(folder: String, path: PathBuf) {
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
-                    watch_for_changes: ChangeWatcher::with_delay(
-                        Duration::from_millis(200),
-                    ),
-                    asset_folder: folder,
+                    file_path: folder,
+                    ..default()
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -146,7 +143,7 @@ fn start_loading(
     asset_svr: Res<AssetServer>,
 ) {
     commands.insert_resource(SceneRes {
-        handle: asset_svr.load(&*config.path),
+        handle: asset_svr.load(config.path.clone()),
         id: None,
         animations: vec![],
         state: SceneState::Loading,
@@ -163,7 +160,8 @@ fn spawn_scene(
     if scene_res.state != SceneState::Loading {
         return;
     }
-    if asset_svr.get_load_state(&scene_res.handle) == LoadState::Loaded {
+    if let Some(LoadState::Loaded) = asset_svr.get_load_state(&scene_res.handle)
+    {
         let gltf = gltf_assets.get(&scene_res.handle).unwrap();
         if let Some(scene) = gltf.scenes.first() {
             scene_res.id = Some(spawner.spawn(scene.clone_weak()));
@@ -309,7 +307,7 @@ fn update_camera(
 
     if mouse.pressed(MouseButton::Middle) {
         let mut motion = Vec2::ZERO;
-        for ev in ev_motion.iter() {
+        for ev in ev_motion.read() {
             motion += ev.delta;
         }
         if motion.length_squared() > 0.0 {
@@ -324,7 +322,7 @@ fn update_camera(
         }
     } else {
         let mut motion = 0.0;
-        for ev in ev_scroll.iter() {
+        for ev in ev_scroll.read() {
             motion += ev.y;
         }
         if motion.abs() > 0.0 {
