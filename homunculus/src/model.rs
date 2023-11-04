@@ -9,7 +9,6 @@ use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::io::Write;
-use std::str::FromStr;
 
 /// Point type
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -209,23 +208,6 @@ impl Ring {
             }
             // adjust axis after rotation applied
             self.axis = Some(Vec3::new(0.0, length, 0.0));
-        }
-    }
-}
-
-impl FromStr for PtDef {
-    type Err = Error;
-
-    fn from_str(code: &str) -> Result<Self> {
-        match code.parse::<f32>() {
-            Ok(dist) => Ok(PtDef::Distance(dist)),
-            Err(_) => {
-                if code.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    Ok(PtDef::Branch(code.into()))
-                } else {
-                    Err(Error::InvalidBranchLabel(code.into()))
-                }
-            }
         }
     }
 }

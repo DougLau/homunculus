@@ -2,8 +2,9 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
+use anyhow::{anyhow, bail, Error};
 use glam::Vec3;
-use homunculus::{Error, Model, Ring, Smoothing};
+use homunculus::{Model, Ring, Smoothing};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -89,7 +90,7 @@ impl FromStr for PtDef {
                 if code.chars().all(|c| c.is_alphanumeric() || c == '_') {
                     Ok(PtDef::Branch(code.into()))
                 } else {
-                    Err(Error::InvalidBranchLabel(code.into()))
+                    bail!("Invalid branch label: {code}")
                 }
             }
         }
@@ -111,7 +112,7 @@ impl RingDef {
                         return Ok(Some(Vec3::new(x, y, z)));
                     }
                 }
-                Err(Error::InvalidAxis(axis.into()))
+                bail!("Invalid axis: {axis}")
             }
             None => Ok(None),
         }
@@ -125,7 +126,7 @@ impl RingDef {
             if repeat {
                 let count = code
                     .parse()
-                    .map_err(|_| Error::InvalidRepeatCount(code.into()))?;
+                    .map_err(|_| anyhow!("Invalid repeat count: {code}"))?;
                 let ptd = defs.last().cloned().unwrap_or(PtDef::Distance(1.0));
                 for _ in 1..count {
                     defs.push(ptd.clone());
@@ -139,7 +140,7 @@ impl RingDef {
             }
             let def = code
                 .parse()
-                .map_err(|_| Error::InvalidPointDef(code.into()))?;
+                .map_err(|_| anyhow!("Invalid point def: {code}"))?;
             defs.push(def);
         }
         Ok(defs)
@@ -150,7 +151,7 @@ impl RingDef {
         match self.smoothing.as_deref() {
             Some("Sharp") => Ok(Some(Smoothing::Sharp)),
             Some("Smooth") => Ok(Some(Smoothing::Smooth)),
-            Some(s) => Err(Error::InvalidSmoothing(s.into())),
+            Some(s) => bail!("Invalid smoothing: {s}"),
             None => Ok(None),
         }
     }
