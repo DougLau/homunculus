@@ -40,22 +40,6 @@ pub struct RingDef {
 }
 
 /// Definition of a 3D model
-///
-/// It can be serialized or deserialized using any [serde] compatible data
-/// format.
-///
-/// After deserializing, a [Model] can be created using `TryFrom`:
-///
-/// ```rust,no_run
-/// # use std::fs::File;
-/// # use homunculus::{Model, ModelDef};
-/// let file = File::open("model.hom").unwrap();
-/// let def: ModelDef = muon_rs::from_reader(file).unwrap();
-/// let model = Model::try_from(&def).unwrap();
-/// ```
-///
-/// [model]: struct.Model.html
-/// [serde]: https://serde.rs/
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ModelDef {
     /// Vec of all rings

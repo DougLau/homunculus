@@ -560,7 +560,18 @@ impl Model {
         Ok(())
     }
 
-    /// Write model as glTF
+    /// Write model as [glTF] `.glb`
+    ///
+    /// ```rust,no_run
+    /// # use homunculus::Model;
+    /// # use std::fs::File;
+    /// let mut model = Model::new();
+    /// // add rings …
+    /// let file = File::open("model.glb").unwrap();
+    /// model.write_gltf(file).unwrap();
+    /// ```
+    ///
+    /// [gltf]: https://en.wikipedia.org/wiki/GlTF
     pub fn write_gltf<W: Write>(mut self, writer: W) -> Result<()> {
         self.add_cap()?;
         let mesh = self.builder.build();
