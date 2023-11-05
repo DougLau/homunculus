@@ -109,7 +109,7 @@ impl Ring {
         Ring {
             id: 0,
             axis: None,
-            point_defs: vec![],
+            point_defs: Vec::new(),
             scale: None,
             smoothing: None,
         }
@@ -216,8 +216,8 @@ impl Branch {
     /// Create a new branch
     fn new() -> Self {
         Branch {
-            vertices: vec![],
-            edges: vec![],
+            vertices: Vec::new(),
+            edges: Vec::new(),
         }
     }
 
@@ -267,15 +267,13 @@ impl Default for Model {
 impl Model {
     /// Create a new 3D model
     pub fn new() -> Model {
-        let builder = Mesh::builder();
-        let branches = HashMap::new();
         Model {
-            builder,
+            builder: Mesh::builder(),
             ring_id: 0,
             xform: Affine3A::IDENTITY,
             ring: None,
-            points: vec![],
-            branches,
+            points: Vec::new(),
+            branches: HashMap::new(),
         }
     }
 
@@ -434,7 +432,7 @@ impl Model {
     fn branch_angles(&self, branch: &str) -> Vec<(usize, usize)> {
         match self.branches.get(branch) {
             Some(branch) => self.edge_angles(branch),
-            None => vec![],
+            None => Vec::new(),
         }
     }
 
@@ -460,7 +458,7 @@ impl Model {
         // Step 3: make vec of (order_deg, vid)
         let mut angle = 0.0;
         let mut ppos = zero_deg;
-        let mut angles = vec![];
+        let mut angles = Vec::with_capacity(vids.len());
         for vid in vids {
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
@@ -475,7 +473,7 @@ impl Model {
 
     /// Get the points for one ring
     fn ring_points(&self, ring: &Ring, hs_other: usize) -> Vec<Point> {
-        let mut pts = vec![];
+        let mut pts = Vec::new();
         for point in &self.points {
             if point.ring_id == ring.id {
                 let mut pt = point.clone();
