@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
+#![doc = include_str!("../README.md")]
+
 mod error;
 mod gltf;
 mod mesh;
