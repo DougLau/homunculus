@@ -25,6 +25,16 @@ enum PtType {
     Branch(String),
 }
 
+/// Point definition
+#[derive(Clone, Debug)]
+enum PtDef {
+    /// Distance from axis
+    Distance(f32),
+
+    /// Branch label
+    Branch(String),
+}
+
 /// A point on model surface
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Point {
@@ -36,16 +46,6 @@ struct Point {
 
     /// Point type
     pt_type: PtType,
-}
-
-/// Point definition
-#[derive(Clone, Debug)]
-enum PtDef {
-    /// Distance from axis
-    Distance(f32),
-
-    /// Branch label
-    Branch(String),
 }
 
 /// Ring around surface of a model
