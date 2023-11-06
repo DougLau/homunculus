@@ -6,9 +6,8 @@ use bevy::{
     asset::LoadState,
     gltf::Gltf,
     input::mouse::{MouseMotion, MouseWheel},
-    math::Vec3A,
     prelude::*,
-    render::primitives::{Aabb, Sphere},
+    render::primitives::Aabb,
     scene::InstanceId,
     window::{PrimaryWindow, Window},
 };
@@ -19,6 +18,7 @@ use std::path::PathBuf;
 #[derive(Resource)]
 struct PathConfig {
     path: PathBuf,
+    stage: bool,
 }
 
 /// Scene state
@@ -26,8 +26,8 @@ struct PathConfig {
 enum SceneState {
     Loading,
     Spawning,
-    Ready,
-    Setup,
+    SpawnCamera,
+    StartAnimation,
     Started,
 }
 
@@ -38,6 +38,7 @@ struct SceneRes {
     id: Option<InstanceId>,
     animations: Vec<Handle<AnimationClip>>,
     state: SceneState,
+    stage: bool,
 }
 
 /// Camera controller component
@@ -99,9 +100,9 @@ impl CameraController {
 }
 
 /// View glTF in an app window
-pub fn view_gltf(folder: String, path: PathBuf) {
+pub fn view_gltf(folder: String, path: PathBuf, stage: bool) {
     let mut app = App::new();
-    app.insert_resource(PathConfig { path })
+    app.insert_resource(PathConfig { path, stage })
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 0.5,
@@ -120,13 +121,13 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                     ..default()
                 }),
         )
-        .add_systems(Startup, start_loading)
+        .add_systems(Startup, (spawn_light, start_loading))
         .add_systems(
             Update,
             (
                 spawn_scene,
                 check_ready,
-                setup_camera_and_light,
+                spawn_camera,
                 start_animation,
                 control_animation,
                 update_camera,
@@ -134,6 +135,17 @@ pub fn view_gltf(folder: String, path: PathBuf) {
             ),
         )
         .run();
+}
+
+/// System to spawn light
+fn spawn_light(mut commands: Commands) {
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 }
 
 /// System to start loading scene
@@ -145,8 +157,9 @@ fn start_loading(
     commands.insert_resource(SceneRes {
         handle: asset_svr.load(config.path.clone()),
         id: None,
-        animations: vec![],
+        animations: Vec::new(),
         state: SceneState::Loading,
+        stage: config.stage,
     });
 }
 
@@ -178,71 +191,58 @@ fn check_ready(mut scene_res: ResMut<SceneRes>, spawner: Res<SceneSpawner>) {
     }
     let id = scene_res.id.unwrap();
     if spawner.instance_is_ready(id) {
-        scene_res.state = SceneState::Ready;
+        scene_res.state = SceneState::SpawnCamera;
     }
 }
 
-/// System to setup camera and light
-fn setup_camera_and_light(
+/// System to spawn camera
+fn spawn_camera(
     mut scene_res: ResMut<SceneRes>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     query: Query<(&GlobalTransform, &Aabb), With<Handle<Mesh>>>,
 ) {
-    if scene_res.state != SceneState::Ready {
+    if scene_res.state != SceneState::SpawnCamera {
         return;
     }
-    scene_res.state = SceneState::Setup;
+    scene_res.state = SceneState::StartAnimation;
     let aabb = bounding_box_meshes(query);
     let (bundle, controller) = build_camera(aabb);
     commands.spawn(bundle).insert(controller);
-    let min = aabb.min();
-    let max = aabb.max();
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        ..default()
-    });
-    let size = (max.x - min.x).max(max.z - min.z);
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane::from_size(size))),
-        material: materials.add(StandardMaterial {
-            base_color: Color::DARK_GREEN,
-            perceptual_roughness: 1.0,
-            ..default()
-        }),
-        ..default()
-    });
+    if scene_res.stage {
+        let min = aabb.min();
+        let max = aabb.max();
+        let size = (max.x - min.x).max(max.y - min.y).max(max.z - min.z);
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Plane::from_size(size))),
+            material: materials.add(StandardMaterial {
+                base_color: Color::DARK_GREEN,
+                perceptual_roughness: 1.0,
+                ..default()
+            }),
+            ..Default::default()
+        });
+    }
 }
 
 /// Get a bounding box containing all meshes
 fn bounding_box_meshes(
     query: Query<(&GlobalTransform, &Aabb), With<Handle<Mesh>>>,
 ) -> Aabb {
-    let mut min = Vec3A::splat(f32::MAX);
-    let mut max = Vec3A::splat(f32::MIN);
+    let mut min = Vec3::splat(f32::MAX);
+    let mut max = Vec3::splat(f32::MIN);
     for (xform, aabb) in &query {
-        let aabb = Aabb::from(Sphere {
-            center: Vec3A::from(xform.transform_point(aabb.center.into())),
-            radius: xform.radius_vec3a(aabb.half_extents),
-        });
-        min = min.min(aabb.min());
-        max = max.max(aabb.max());
+        min = min.min(xform.transform_point(aabb.min().into()));
+        max = max.max(xform.transform_point(aabb.max().into()));
     }
-    let aabb = Aabb::from_min_max(Vec3::from(min), Vec3::from(max));
-    Aabb::from(Sphere {
-        center: aabb.center,
-        radius: aabb.half_extents.length(),
-    })
+    Aabb::from_min_max(min, max)
 }
 
 /// Build camera bundle and controller
 fn build_camera(aabb: Aabb) -> (Camera3dBundle, CameraController) {
     let look = Vec3::from(aabb.center);
-    let pos = Vec3::from(aabb.center + aabb.half_extents * 0.6);
+    let pos = Vec3::from(aabb.center + aabb.half_extents * 4.0);
     let bundle = Camera3dBundle {
         transform: Transform::from_translation(pos).looking_at(look, Vec3::Y),
         ..Default::default()
@@ -256,7 +256,7 @@ fn start_animation(
     mut scene_res: ResMut<SceneRes>,
     mut players: Query<&mut AnimationPlayer>,
 ) {
-    if scene_res.state != SceneState::Setup {
+    if scene_res.state != SceneState::StartAnimation {
         return;
     }
     if let Ok(mut player) = players.get_single_mut() {

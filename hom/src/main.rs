@@ -20,6 +20,10 @@ struct Args {
     #[argh(switch, short = 'v')]
     view: bool,
 
+    /// spawn stage
+    #[argh(switch, short = 's')]
+    stage: bool,
+
     /// model file name (.hom, .glb, .gltf)
     #[argh(positional)]
     model_file: String,
@@ -31,7 +35,7 @@ fn main() -> Result<()> {
     let path = args.build_model()?;
     if args.view {
         let folder = std::env::current_dir()?.display().to_string();
-        view::view_gltf(folder, path);
+        view::view_gltf(folder, path, args.stage);
     }
     Ok(())
 }
