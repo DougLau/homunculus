@@ -50,7 +50,7 @@ impl TryFrom<&RingDef> for Ring {
     type Error = Error;
 
     fn try_from(def: &RingDef) -> Result<Self> {
-        let mut ring = Ring::new();
+        let mut ring = Ring::default();
         *ring.axis_mut() = def.axis()?;
         *ring.scale_mut() = def.scale;
         *ring.smoothing_mut() = def.smoothing()?;

@@ -9,6 +9,11 @@ use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::io::Write;
+use std::ops::Add;
+
+/// Angular degrees
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+struct Degrees(u16);
 
 /// Point type
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -24,7 +29,7 @@ enum PtType {
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Point {
     /// Degrees around ring (must be first for `Ord`)
-    order_deg: usize,
+    order_deg: Degrees,
 
     /// Ring ID
     ring_id: usize,
@@ -44,7 +49,7 @@ enum PtDef {
 }
 
 /// Ring around surface of a model
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Ring {
     /// Ring ID
     id: usize,
@@ -81,11 +86,11 @@ pub struct Model {
     /// Mesh builder
     builder: MeshBuilder,
 
-    /// Global transform
-    xform: Affine3A,
-
     /// Current ring ID
     ring_id: usize,
+
+    /// Global transform for current ring
+    xform: Affine3A,
 
     /// Current ring
     ring: Option<Ring>,
@@ -97,19 +102,28 @@ pub struct Model {
     branches: HashMap<String, Branch>,
 }
 
-impl Default for Ring {
-    fn default() -> Self {
-        Self::new()
+impl From<f32> for Degrees {
+    fn from(angle: f32) -> Self {
+        let deg = angle.to_degrees().rem_euclid(360.0);
+        Degrees(deg.round() as u16)
+    }
+}
+
+impl Add for Degrees {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Degrees(self.0 + rhs.0 % 360)
     }
 }
 
 impl Ring {
-    /// Create a new ring
-    pub fn new() -> Self {
+    /// Create a new branch ring
+    pub fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
         Ring {
-            id: 0,
-            axis: None,
-            point_defs: Vec::new(),
+            id,
+            axis: Some(axis),
+            point_defs: vec![PtDef::Distance(1.0); pts],
             scale: None,
             smoothing: None,
         }
@@ -173,8 +187,9 @@ impl Ring {
     }
 
     /// Get half step in degrees
-    fn half_step(&self) -> usize {
-        180 / self.point_defs.len()
+    fn half_step(&self) -> Degrees {
+        let deg = 180 / self.point_defs.len();
+        Degrees(deg as u16)
     }
 
     /// Calculate the angle of a point
@@ -293,7 +308,7 @@ impl Model {
     }
 
     /// Push one point
-    fn push_pt(&mut self, order_deg: usize, pt_type: PtType) {
+    fn push_pt(&mut self, order_deg: Degrees, pt_type: PtType) {
         let ring_id = self.ring_id();
         self.points.push(Point {
             order_deg,
@@ -306,7 +321,7 @@ impl Model {
     fn add_ring_points(&mut self, ring: &Ring) {
         for (i, ptd) in ring.point_defs.iter().enumerate() {
             let angle = ring.angle(i);
-            let order_deg = angle.to_degrees() as usize;
+            let order_deg = Degrees::from(angle);
             let rot = Quat::from_rotation_y(angle);
             match ptd {
                 PtDef::Distance(dist) => {
@@ -347,24 +362,30 @@ impl Model {
         Ok(())
     }
 
-    /// Add a cap
+    /// Add a cap face on the current branch
     fn add_cap(&mut self) -> Result<()> {
-        let mut ring = self.ring.take().ok_or(Error::MissingRing())?;
-        let mut pts = self.ring_points(&ring, 0);
-        let first = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
+        match self.ring.take() {
+            Some(ring) => self.add_cap_ring(ring),
+            None => Ok(()),
+        }
+    }
+
+    /// Add a cap face on the given ring
+    fn add_cap_ring(&mut self, mut ring: Ring) -> Result<()> {
+        let mut pts = self.ring_points(&ring, Degrees(0));
+        let last = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
+        // add cap center point
         let pos = self.xform.transform_point3(Vec3::ZERO);
         let vid = self.builder.push_vtx(pos);
         ring.id = self.ring_id();
-        self.ring = Some(ring);
-        self.push_pt(0, PtType::Vertex(vid));
-        let cpt = self.points.last().unwrap().clone();
-        let ring = self.ring.take().unwrap();
-        let mut ppt = first.clone();
-        while let Some(pt) = pts.pop() {
-            self.add_face([&ppt, &pt, &cpt], ring.smoothing())?;
-            ppt = pt;
+        self.push_pt(Degrees(0), PtType::Vertex(vid));
+        let center = self.points.last().unwrap().clone();
+        let mut prev = last.clone();
+        for pt in pts.drain(..) {
+            self.add_face([&pt, &prev, &center], ring.smoothing())?;
+            prev = pt;
         }
-        self.add_face([&ppt, &first, &cpt], ring.smoothing())?;
+        self.add_face([&last, &prev, &center], ring.smoothing())?;
         self.ring_id += 1;
         Ok(())
     }
@@ -379,15 +400,12 @@ impl Model {
         let id = self.ring_id();
         let (center, len) = self.branch_center_vertices(branch)?;
         self.xform = Affine3A::from_translation(center);
+        // start with base of branch
         let ax = self.branch_axis(branch);
-        let mut ring = Ring {
-            id,
-            axis: Some(ax),
-            point_defs: vec![PtDef::Distance(1.0); len],
-            ..Default::default()
-        };
+        let mut ring = Ring::with_branch(id, ax, len);
         ring.transform_rotate(&mut self.xform);
         if let Some(axis) = axis {
+            // modify axis if specified
             ring.axis = Some(axis);
             ring.transform_rotate(&mut self.xform);
         }
@@ -429,7 +447,7 @@ impl Model {
     }
 
     /// Calculate angles for a branch base
-    fn branch_angles(&self, branch: &str) -> Vec<(usize, usize)> {
+    fn branch_angles(&self, branch: &str) -> Vec<(Degrees, usize)> {
         match self.branches.get(branch) {
             Some(branch) => self.edge_angles(branch),
             None => Vec::new(),
@@ -437,7 +455,7 @@ impl Model {
     }
 
     /// Calculate edge angles for a branch base
-    fn edge_angles(&self, branch: &Branch) -> Vec<(usize, usize)> {
+    fn edge_angles(&self, branch: &Branch) -> Vec<(Degrees, usize)> {
         let inverse = self.xform.inverse();
         let zero_deg = Vec3::new(1.0, 0.0, 0.0);
         // Step 1: find "first" edge vertex (closest to 0 degrees)
@@ -464,7 +482,7 @@ impl Model {
             let pos = Vec3::new(pos.x, 0.0, pos.z);
             let ang = ppos.angle_between(pos);
             angle += ang;
-            let order_deg = angle.to_degrees() as usize;
+            let order_deg = Degrees::from(angle);
             angles.push((order_deg, vid));
             ppos = pos;
         }
@@ -472,13 +490,13 @@ impl Model {
     }
 
     /// Get the points for one ring
-    fn ring_points(&self, ring: &Ring, hs_other: usize) -> Vec<Point> {
+    fn ring_points(&self, ring: &Ring, hs_other: Degrees) -> Vec<Point> {
         let mut pts = Vec::new();
         for point in &self.points {
             if point.ring_id == ring.id {
                 let mut pt = point.clone();
                 // adjust degrees by half step of other ring
-                pt.order_deg = (pt.order_deg + hs_other) % 360;
+                pt.order_deg = pt.order_deg + hs_other;
                 pts.push(pt);
             }
         }

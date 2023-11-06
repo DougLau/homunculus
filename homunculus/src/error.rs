@@ -18,10 +18,6 @@ pub enum Error {
     #[error("Invalid ring: {0}")]
     InvalidRing(usize),
 
-    /// Missing Ring
-    #[error("Missing ring")]
-    MissingRing(),
-
     /// Unknown Branch Label
     #[error("Unknown branch label: {0}")]
     UnknownBranchLabel(String),
