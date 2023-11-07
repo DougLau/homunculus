@@ -15,21 +15,26 @@ use std::ops::Add;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Degrees(u16);
 
-/// Point type
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-enum PtType {
-    /// Vertex number
-    Vertex(usize),
+/// Ring point
+///
+/// A point on a ring with distance from the central axis.  An optional label
+/// can be declared for a [branch] point.
+///
+/// [branch]: struct.Model.html#method.branch
+#[derive(Clone, Debug)]
+pub struct RingPoint {
+    /// Distance from axis
+    distance: f32,
 
     /// Branch label
-    Branch(String),
+    branch: Option<String>,
 }
 
-/// Point definition
-#[derive(Clone, Debug)]
-enum PtDef {
-    /// Distance from axis
-    Distance(f32),
+/// Point type
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+enum Pt {
+    /// Vertex number
+    Vertex(usize),
 
     /// Branch label
     Branch(String),
@@ -45,10 +50,12 @@ struct Point {
     ring_id: usize,
 
     /// Point type
-    pt_type: PtType,
+    pt_type: Pt,
 }
 
-/// Ring around surface of a model
+/// Ring around a [Model] hull
+///
+/// [model]: struct.Model.html
 #[derive(Clone, Debug, Default)]
 pub struct Ring {
     /// Ring ID
@@ -57,8 +64,8 @@ pub struct Ring {
     /// Axis vector
     axis: Option<Vec3>,
 
-    /// Point definitions
-    point_defs: Vec<PtDef>,
+    /// Ring points
+    points: Vec<RingPoint>,
 
     /// Scale factor
     scale: Option<f32>,
@@ -74,14 +81,25 @@ struct Edge(usize, usize);
 /// Branch data
 #[derive(Debug)]
 struct Branch {
-    /// Branch connection vertices
-    vertices: Vec<Vec3>,
+    /// Internal connection vertices (non-edge)
+    internal: Vec<Vec3>,
 
-    /// Branch edges
+    /// Edges at base of branch
     edges: Vec<Edge>,
 }
 
 /// A 3D model
+///
+/// A series of [Ring]s defines the hull of a model.
+///
+/// ```rust
+/// # use homunculus::{Model, Ring};
+/// let mut model = Model::new();
+/// model.ring(Ring::default().point(2.0).point(1.0).point(1.5));
+/// model.ring(Ring::default().point(1.5).point(1.1).point(1.2));
+/// ```
+///
+/// [ring]: struct.Ring.html
 pub struct Model {
     /// Mesh builder
     builder: MeshBuilder,
@@ -117,13 +135,46 @@ impl Add for Degrees {
     }
 }
 
+impl Default for RingPoint {
+    fn default() -> Self {
+        RingPoint::from(1.0)
+    }
+}
+
+impl From<f32> for RingPoint {
+    fn from(distance: f32) -> Self {
+        RingPoint {
+            distance,
+            branch: None,
+        }
+    }
+}
+
+impl From<&str> for RingPoint {
+    fn from(branch: &str) -> Self {
+        RingPoint {
+            distance: 1.0,
+            branch: Some(branch.to_string()),
+        }
+    }
+}
+
+impl From<(f32, &str)> for RingPoint {
+    fn from(val: (f32, &str)) -> Self {
+        RingPoint {
+            distance: val.0,
+            branch: Some(val.1.to_string()),
+        }
+    }
+}
+
 impl Ring {
     /// Create a new branch ring
     fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
         Ring {
             id,
             axis: Some(axis),
-            point_defs: vec![PtDef::Distance(1.0); pts],
+            points: vec![RingPoint::default(); pts],
             scale: None,
             smoothing: None,
         }
@@ -167,8 +218,8 @@ impl Ring {
         if ring.axis.is_some() {
             self.axis = ring.axis;
         }
-        if !ring.point_defs.is_empty() {
-            self.point_defs = ring.point_defs.clone();
+        if !ring.points.is_empty() {
+            self.points = ring.points.clone();
         }
         if ring.scale.is_some() {
             self.scale = ring.scale;
@@ -179,25 +230,32 @@ impl Ring {
         self
     }
 
-    /// Add a point
-    pub fn point(&mut self, dist: f32) {
-        self.point_defs.push(PtDef::Distance(dist));
-    }
-
-    /// Add a branch point
-    pub fn branch_point(&mut self, branch: &str) {
-        self.point_defs.push(PtDef::Branch(branch.into()));
+    /// Add a ring / [branch] point
+    ///
+    /// ```rust
+    /// # use homunculus::Ring;
+    /// let ring = Ring::default()
+    ///     .point(2.0)
+    ///     .point(2.7)
+    ///     .point("branch A")
+    ///     .point((1.6, "branch A"))
+    ///     .point(1.8);
+    /// ```
+    /// [branch]: struct.Model.html#method.branch
+    pub fn point<P: Into<RingPoint>>(mut self, pt: P) -> Self {
+        self.points.push(pt.into());
+        self
     }
 
     /// Get half step in degrees
     fn half_step(&self) -> Degrees {
-        let deg = 180 / self.point_defs.len();
+        let deg = 180 / self.points.len();
         Degrees(deg as u16)
     }
 
     /// Calculate the angle of a point
     fn angle(&self, i: usize) -> f32 {
-        2.0 * PI * i as f32 / self.point_defs.len() as f32
+        2.0 * PI * i as f32 / self.points.len() as f32
     }
 
     /// Translate a transform from axis
@@ -235,7 +293,7 @@ impl Branch {
     /// Create a new branch
     fn new() -> Self {
         Branch {
-            vertices: Vec::new(),
+            internal: Vec::new(),
             edges: Vec::new(),
         }
     }
@@ -258,10 +316,10 @@ impl Branch {
         edges.into_iter().map(|e| e.0).collect()
     }
 
-    /// Get center of branch vertices
+    /// Get center of internal vertices
     fn center(&self) -> Vec3 {
-        let len = self.vertices.len() as f32;
-        self.vertices.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
+        let len = self.internal.len() as f32;
+        self.internal.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
     }
 
     /// Get count of vertices on edges
@@ -301,18 +359,18 @@ impl Model {
         self.ring_id
     }
 
-    /// Add branch vertex
+    /// Add internal branch vertex
     fn add_branch_vertex(&mut self, branch: &str, pos: Vec3) {
         if !self.branches.contains_key(branch) {
             self.branches.insert(branch.to_string(), Branch::new());
         }
         // unwrap can never panic because of contains_key test
         let branch = self.branches.get_mut(branch).unwrap();
-        branch.vertices.push(pos);
+        branch.internal.push(pos);
     }
 
     /// Push one point
-    fn push_pt(&mut self, order_deg: Degrees, pt_type: PtType) {
+    fn push_pt(&mut self, order_deg: Degrees, pt_type: Pt) {
         let ring_id = self.ring_id();
         self.points.push(Point {
             order_deg,
@@ -323,24 +381,21 @@ impl Model {
 
     /// Add points for a ring
     fn add_ring_points(&mut self, ring: &Ring) {
-        for (i, ptd) in ring.point_defs.iter().enumerate() {
+        for (i, ptd) in ring.points.iter().enumerate() {
             let angle = ring.angle(i);
             let order_deg = Degrees::from(angle);
             let rot = Quat::from_rotation_y(angle);
-            match ptd {
-                PtDef::Distance(dist) => {
-                    let pos = rot
-                        * Vec3::new(dist * ring.scale_or_default(), 0.0, 0.0);
-                    let pos = self.xform.transform_point3(pos);
+            let pos = rot
+                * Vec3::new(ptd.distance * ring.scale_or_default(), 0.0, 0.0);
+            let pos = self.xform.transform_point3(pos);
+            match &ptd.branch {
+                None => {
                     let vid = self.builder.push_vtx(pos);
-                    self.push_pt(order_deg, PtType::Vertex(vid));
+                    self.push_pt(order_deg, Pt::Vertex(vid));
                 }
-                PtDef::Branch(branch) => {
-                    let pos =
-                        rot * Vec3::new(ring.scale_or_default(), 0.0, 0.0);
-                    let pos = self.xform.transform_point3(pos);
+                Some(branch) => {
                     self.add_branch_vertex(branch, pos);
-                    self.push_pt(order_deg, PtType::Branch(branch.into()))
+                    self.push_pt(order_deg, Pt::Branch(branch.into()))
                 }
             }
         }
@@ -384,7 +439,7 @@ impl Model {
         let pos = self.xform.transform_point3(Vec3::ZERO);
         let vid = self.builder.push_vtx(pos);
         ring.id = self.ring_id();
-        self.push_pt(Degrees(0), PtType::Vertex(vid));
+        self.push_pt(Degrees(0), Pt::Vertex(vid));
         let center = self.points.last().unwrap().clone();
         let mut prev = last.clone();
         for pt in pts.drain(..) {
@@ -396,14 +451,19 @@ impl Model {
         Ok(())
     }
 
-    /// Add a branch base ring
-    pub fn branch(&mut self, branch: &str, axis: Option<Vec3>) -> Result<()> {
+    /// End the current branch and start the `label` branch
+    pub fn branch(
+        &mut self,
+        label: impl AsRef<str>,
+        axis: Option<Vec3>,
+    ) -> Result<()> {
         self.cap()?;
+        let label = label.as_ref();
         let id = self.ring_id();
-        let (center, len) = self.branch_center_vertices(branch)?;
+        let (center, len) = self.branch_center_vertices(label)?;
         self.xform = Affine3A::from_translation(center);
         // start with base of branch
-        let ax = self.branch_axis(branch);
+        let ax = self.branch_axis(label);
         let mut ring = Ring::with_branch(id, ax, len);
         ring.transform_rotate(&mut self.xform);
         if let Some(axis) = axis {
@@ -412,29 +472,29 @@ impl Model {
             ring.transform_rotate(&mut self.xform);
         }
         self.ring = Some(ring);
-        for (order_deg, vid) in self.branch_angles(branch) {
-            self.push_pt(order_deg, PtType::Vertex(vid));
+        for (order_deg, vid) in self.branch_angles(label) {
+            self.push_pt(order_deg, Pt::Vertex(vid));
         }
         self.ring_id += 1;
         Ok(())
     }
 
     /// Get center of a branch base
-    fn branch_center_vertices(&self, branch: &str) -> Result<(Vec3, usize)> {
-        match self.branches.get(branch) {
+    fn branch_center_vertices(&self, label: &str) -> Result<(Vec3, usize)> {
+        match self.branches.get(label) {
             Some(branch) => {
                 let center = branch.center();
                 let count = branch.edge_vertex_count();
                 Ok((center, count))
             }
-            None => Err(Error::UnknownBranchLabel(branch.into())),
+            None => Err(Error::UnknownBranchLabel(label.into())),
         }
     }
 
     /// Calculate axis for a branch base
-    fn branch_axis(&self, branch: &str) -> Vec3 {
+    fn branch_axis(&self, label: &str) -> Vec3 {
         let center = self.xform.transform_point3(Vec3::ZERO);
-        match self.branches.get(branch) {
+        match self.branches.get(label) {
             Some(branch) => {
                 let mut norm = Vec3::ZERO;
                 for edge in &branch.edges {
@@ -449,8 +509,8 @@ impl Model {
     }
 
     /// Calculate angles for a branch base
-    fn branch_angles(&self, branch: &str) -> Vec<(Degrees, usize)> {
-        match self.branches.get(branch) {
+    fn branch_angles(&self, label: &str) -> Vec<(Degrees, usize)> {
+        match self.branches.get(label) {
             Some(branch) => self.edge_angles(branch),
             None => Vec::new(),
         }
@@ -543,22 +603,22 @@ impl Model {
         smoothing: Smoothing,
     ) -> Result<()> {
         match (&pts[0].pt_type, &pts[1].pt_type, &pts[2].pt_type) {
-            (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Vertex(v2)) => {
+            (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Vertex(v2)) => {
                 let face = Face::new([*v0, *v1, *v2], smoothing);
                 self.builder.push_face(face);
             }
-            (PtType::Branch(b), PtType::Vertex(v0), PtType::Vertex(v1))
-            | (PtType::Vertex(v1), PtType::Branch(b), PtType::Vertex(v0))
-            | (PtType::Vertex(v0), PtType::Vertex(v1), PtType::Branch(b)) => {
+            (Pt::Branch(b), Pt::Vertex(v0), Pt::Vertex(v1))
+            | (Pt::Vertex(v1), Pt::Branch(b), Pt::Vertex(v0))
+            | (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Branch(b)) => {
                 let branch = self
                     .branches
                     .get_mut(b)
                     .ok_or_else(|| Error::UnknownBranchLabel(b.into()))?;
                 branch.edges.push(Edge(*v0, *v1));
             }
-            (PtType::Vertex(_v), PtType::Branch(b0), PtType::Branch(b1))
-            | (PtType::Branch(b0), PtType::Vertex(_v), PtType::Branch(b1))
-            | (PtType::Branch(b0), PtType::Branch(b1), PtType::Vertex(_v)) => {
+            (Pt::Vertex(_v), Pt::Branch(b0), Pt::Branch(b1))
+            | (Pt::Branch(b0), Pt::Vertex(_v), Pt::Branch(b1))
+            | (Pt::Branch(b0), Pt::Branch(b1), Pt::Vertex(_v)) => {
                 // A single vertex and two branch points:
                 // - both points must be for the same branch
                 // - no edges need to be added
@@ -568,7 +628,7 @@ impl Model {
                     )));
                 }
             }
-            (PtType::Branch(b0), PtType::Branch(b1), PtType::Branch(b2)) => {
+            (Pt::Branch(b0), Pt::Branch(b1), Pt::Branch(b2)) => {
                 // Three adjacent branch points:
                 // - all points must be for the same branch
                 if b0 != b1 {
@@ -593,7 +653,7 @@ impl Model {
     /// # use std::fs::File;
     /// let mut model = Model::new();
     /// // add rings …
-    /// let file = File::open("model.glb").unwrap();
+    /// let file = File::create("model.glb").unwrap();
     /// model.write_gltf(file).unwrap();
     /// ```
     ///

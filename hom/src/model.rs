@@ -16,7 +16,7 @@ enum PtDef {
     /// Distance from axis
     Distance(f32),
 
-    /// Branch label
+    /// Branch label (FIXME: add distance as well)
     Branch(String),
 }
 
@@ -55,10 +55,10 @@ impl TryFrom<&RingDef> for Ring {
             .scale(def.scale)
             .smoothing(def.smoothing()?);
         for pt in def.point_defs()? {
-            match pt {
+            ring = match pt {
                 PtDef::Distance(d) => ring.point(d),
-                PtDef::Branch(b) => ring.branch_point(&b),
-            }
+                PtDef::Branch(b) => ring.point(b.as_ref()),
+            };
         }
         Ok(ring)
     }
