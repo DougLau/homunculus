@@ -119,7 +119,7 @@ impl Add for Degrees {
 
 impl Ring {
     /// Create a new branch ring
-    pub fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
+    fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
         Ring {
             id,
             axis: Some(axis),
@@ -129,34 +129,37 @@ impl Ring {
         }
     }
 
+    /// Set ring axis
+    pub fn axis(mut self, axis: Option<Vec3>) -> Self {
+        self.axis = axis;
+        self
+    }
+
+    /// Set ring scale
+    pub fn scale(mut self, scale: Option<f32>) -> Self {
+        self.scale = scale;
+        self
+    }
+
+    /// Set edge smoothing
+    pub fn smoothing(mut self, smoothing: Option<Smoothing>) -> Self {
+        self.smoothing = smoothing;
+        self
+    }
+
     /// Get the ring axis (or default value)
-    pub fn axis(&self) -> Vec3 {
+    fn axis_or_default(&self) -> Vec3 {
         self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
-    /// Get mutable ring axis
-    pub fn axis_mut(&mut self) -> &mut Option<Vec3> {
-        &mut self.axis
-    }
-
     /// Get the ring scale (or default value)
-    pub fn scale(&self) -> f32 {
+    fn scale_or_default(&self) -> f32 {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Get ring scale mutably
-    pub fn scale_mut(&mut self) -> &mut Option<f32> {
-        &mut self.scale
-    }
-
     /// Get the edge smoothing (or default value)
-    pub fn smoothing(&self) -> Smoothing {
+    fn smoothing_or_default(&self) -> Smoothing {
         self.smoothing.unwrap_or(Smoothing::Smooth)
-    }
-
-    /// Set mutable edge smoothing
-    pub fn smoothing_mut(&mut self) -> &mut Option<Smoothing> {
-        &mut self.smoothing
     }
 
     /// Update with another ring
@@ -177,12 +180,12 @@ impl Ring {
     }
 
     /// Add a point
-    pub fn add_point(&mut self, dist: f32) {
+    pub fn point(&mut self, dist: f32) {
         self.point_defs.push(PtDef::Distance(dist));
     }
 
     /// Add a branch point
-    pub fn add_branch_point(&mut self, branch: &str) {
+    pub fn branch_point(&mut self, branch: &str) {
         self.point_defs.push(PtDef::Branch(branch.into()));
     }
 
@@ -199,7 +202,8 @@ impl Ring {
 
     /// Translate a transform from axis
     fn transform_translate(&self, xform: &mut Affine3A) {
-        xform.translation += xform.matrix3.mul_vec3a(Vec3A::from(self.axis()));
+        xform.translation +=
+            xform.matrix3.mul_vec3a(Vec3A::from(self.axis_or_default()));
     }
 
     /// Rotate a transform from axis
@@ -325,13 +329,15 @@ impl Model {
             let rot = Quat::from_rotation_y(angle);
             match ptd {
                 PtDef::Distance(dist) => {
-                    let pos = rot * Vec3::new(dist * ring.scale(), 0.0, 0.0);
+                    let pos = rot
+                        * Vec3::new(dist * ring.scale_or_default(), 0.0, 0.0);
                     let pos = self.xform.transform_point3(pos);
                     let vid = self.builder.push_vtx(pos);
                     self.push_pt(order_deg, PtType::Vertex(vid));
                 }
                 PtDef::Branch(branch) => {
-                    let pos = rot * Vec3::new(ring.scale(), 0.0, 0.0);
+                    let pos =
+                        rot * Vec3::new(ring.scale_or_default(), 0.0, 0.0);
                     let pos = self.xform.transform_point3(pos);
                     self.add_branch_vertex(branch, pos);
                     self.push_pt(order_deg, PtType::Branch(branch.into()))
@@ -341,7 +347,7 @@ impl Model {
     }
 
     /// Add a ring
-    pub fn add_ring(&mut self, ring: Ring) -> Result<()> {
+    pub fn ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
         let mut ring = match &pring {
             Some(pr) => {
@@ -363,15 +369,15 @@ impl Model {
     }
 
     /// Add a cap face on the current branch
-    fn add_cap(&mut self) -> Result<()> {
+    fn cap(&mut self) -> Result<()> {
         match self.ring.take() {
-            Some(ring) => self.add_cap_ring(ring),
+            Some(ring) => self.cap_ring(ring),
             None => Ok(()),
         }
     }
 
     /// Add a cap face on the given ring
-    fn add_cap_ring(&mut self, mut ring: Ring) -> Result<()> {
+    fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
         let mut pts = self.ring_points(&ring, Degrees(0));
         let last = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
         // add cap center point
@@ -382,21 +388,17 @@ impl Model {
         let center = self.points.last().unwrap().clone();
         let mut prev = last.clone();
         for pt in pts.drain(..) {
-            self.add_face([&pt, &prev, &center], ring.smoothing())?;
+            self.add_face([&pt, &prev, &center], ring.smoothing_or_default())?;
             prev = pt;
         }
-        self.add_face([&last, &prev, &center], ring.smoothing())?;
+        self.add_face([&last, &prev, &center], ring.smoothing_or_default())?;
         self.ring_id += 1;
         Ok(())
     }
 
     /// Add a branch base ring
-    pub fn add_branch(
-        &mut self,
-        branch: &str,
-        axis: Option<Vec3>,
-    ) -> Result<()> {
-        self.add_cap()?;
+    pub fn branch(&mut self, branch: &str, axis: Option<Vec3>) -> Result<()> {
+        self.cap()?;
         let id = self.ring_id();
         let (center, len) = self.branch_center_vertices(branch)?;
         self.xform = Affine3A::from_translation(center);
@@ -522,7 +524,7 @@ impl Model {
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&pt1, &pt0, &pt], ring0.smoothing())?;
+            self.add_face([&pt1, &pt0, &pt], ring0.smoothing_or_default())?;
             if pt.ring_id == ring0.id {
                 pt0 = pt;
             } else {
@@ -530,8 +532,8 @@ impl Model {
             }
         }
         // connect with first vertices on band
-        self.add_face([&pt1, &pt0, &first1], ring0.smoothing())?;
-        self.add_face([&first0, &first1, &pt0], ring0.smoothing())
+        self.add_face([&pt1, &pt0, &first1], ring0.smoothing_or_default())?;
+        self.add_face([&first0, &first1, &pt0], ring0.smoothing_or_default())
     }
 
     /// Add a triangle face
@@ -591,7 +593,7 @@ impl Model {
     ///
     /// [gltf]: https://en.wikipedia.org/wiki/GlTF
     pub fn write_gltf<W: Write>(mut self, writer: W) -> Result<()> {
-        self.add_cap()?;
+        self.cap()?;
         let mesh = self.builder.build();
         gltf::export(writer, &mesh)?;
         Ok(())

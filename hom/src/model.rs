@@ -50,14 +50,14 @@ impl TryFrom<&RingDef> for Ring {
     type Error = Error;
 
     fn try_from(def: &RingDef) -> Result<Self> {
-        let mut ring = Ring::default();
-        *ring.axis_mut() = def.axis()?;
-        *ring.scale_mut() = def.scale;
-        *ring.smoothing_mut() = def.smoothing()?;
+        let mut ring = Ring::default()
+            .axis(def.axis()?)
+            .scale(def.scale)
+            .smoothing(def.smoothing()?);
         for pt in def.point_defs()? {
             match pt {
-                PtDef::Distance(d) => ring.add_point(d),
-                PtDef::Branch(b) => ring.add_branch_point(&b),
+                PtDef::Distance(d) => ring.point(d),
+                PtDef::Branch(b) => ring.branch_point(&b),
             }
         }
         Ok(ring)
@@ -148,9 +148,9 @@ impl TryFrom<&ModelDef> for Model {
         let mut model = Model::new();
         for ring in &def.ring {
             if let Some(branch) = &ring.branch {
-                model.add_branch(branch, ring.axis()?)?;
+                model.branch(branch, ring.axis()?)?;
             }
-            model.add_ring(ring.try_into()?)?;
+            model.ring(ring.try_into()?)?;
         }
         Ok(model)
     }
