@@ -435,6 +435,9 @@ impl Model {
     fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
         let mut pts = self.ring_points(&ring, Degrees(0));
         let last = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
+        if pts.is_empty() {
+            return Ok(());
+        }
         // add cap center point
         let pos = self.xform.transform_point3(Vec3::ZERO);
         let vid = self.builder.push_vtx(pos);
