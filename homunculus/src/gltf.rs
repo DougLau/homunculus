@@ -1,6 +1,6 @@
 // gltf.rs      glTF module
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022-2023  Douglas Lau
 //
 use crate::mesh::Mesh;
 use serde_json::{json, Value};
@@ -30,6 +30,7 @@ enum Target {
 }
 
 /// Builder for glTF
+#[derive(Default)]
 struct Builder {
     bin: Vec<u8>,
     views: Vec<Value>,
@@ -49,20 +50,6 @@ fn as_u8_slice<T: Sized>(p: &[T]) -> &[u8] {
 }
 
 impl Builder {
-    /// Create a new glTF builder
-    fn new() -> Builder {
-        let bin = vec![];
-        let views = vec![];
-        let accessors = vec![];
-        let meshes = vec![];
-        Builder {
-            bin,
-            views,
-            accessors,
-            meshes,
-        }
-    }
-
     /// Add a mesh
     fn add_mesh(&mut self, mesh: &Mesh) {
         let count = mesh.positions().len();
@@ -156,7 +143,7 @@ impl Builder {
 
 /// Export a mesh to a writer as a GLB
 pub fn export<W: Write>(writer: W, mesh: &Mesh) -> Result<()> {
-    let mut builder = Builder::new();
+    let mut builder = Builder::default();
     builder.add_mesh(mesh);
     let bin = builder.bin();
     let mut root_json = builder.json().to_string();

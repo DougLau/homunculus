@@ -48,7 +48,7 @@ impl Args {
         match path.extension() {
             Some(ext) if ext == "glb" || ext == "gltf" => {
                 if !self.view {
-                    anyhow::bail!("{} already glTF model", path.display());
+                    anyhow::bail!("{path:?} already glTF model");
                 }
                 Ok(path.into())
             }
