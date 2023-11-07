@@ -563,17 +563,23 @@ impl Model {
                 // - both points must be for the same branch
                 // - no edges need to be added
                 if b0 != b1 {
-                    return Err(Error::InvalidBranches(b0.into(), b1.into()));
+                    return Err(Error::InvalidBranches(format!(
+                        "{b0} != {b1}"
+                    )));
                 }
             }
             (PtType::Branch(b0), PtType::Branch(b1), PtType::Branch(b2)) => {
                 // Three adjacent branch points:
                 // - all points must be for the same branch
                 if b0 != b1 {
-                    return Err(Error::InvalidBranches(b0.into(), b1.into()));
+                    return Err(Error::InvalidBranches(format!(
+                        "{b0} != {b1}"
+                    )));
                 }
                 if b0 != b2 {
-                    return Err(Error::InvalidBranches(b0.into(), b2.into()));
+                    return Err(Error::InvalidBranches(format!(
+                        "{b0} != {b2}"
+                    )));
                 }
             }
         }

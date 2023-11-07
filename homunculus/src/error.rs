@@ -10,13 +10,13 @@ pub enum Error {
     #[error("I/O {0}")]
     Io(#[from] std::io::Error),
 
-    /// Invalid Branches
-    #[error("Invalid branches: {0} {1}")]
-    InvalidBranches(String, String),
-
     /// Invalid Ring
     #[error("Invalid ring: {0}")]
     InvalidRing(usize),
+
+    /// Invalid Branches
+    #[error("Invalid branches: {0}")]
+    InvalidBranches(String),
 
     /// Unknown Branch Label
     #[error("Unknown branch label: {0}")]
