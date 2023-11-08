@@ -4,7 +4,7 @@
 //
 use anyhow::{anyhow, bail, Error};
 use glam::Vec3;
-use homunculus::{Model, Ring};
+use homunculus::{Husk, Ring};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -145,17 +145,17 @@ impl RingDef {
     }
 }
 
-impl TryFrom<&ModelDef> for Model {
+impl TryFrom<&ModelDef> for Husk {
     type Error = Error;
 
     fn try_from(def: &ModelDef) -> Result<Self> {
-        let mut model = Model::new();
+        let mut husk = Husk::new();
         for ring in &def.ring {
-            if let Some(branch) = &ring.branch {
-                model.branch(branch, ring.axis()?)?;
+            if let Some(label) = &ring.branch {
+                husk.branch(label, ring.axis()?)?;
             }
-            model.ring(ring.try_into()?)?;
+            husk.ring(ring.try_into()?)?;
         }
-        Ok(model)
+        Ok(husk)
     }
 }

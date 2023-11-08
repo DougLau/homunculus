@@ -6,8 +6,10 @@
 
 mod error;
 mod gltf;
+mod husk;
 mod mesh;
-mod model;
+mod ring;
 
 pub use error::Error;
-pub use model::{Model, Ring, RingPoint};
+pub use husk::Husk;
+pub use ring::{Ring, RingPoint};

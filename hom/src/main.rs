@@ -8,7 +8,7 @@ mod view;
 use crate::model::ModelDef;
 use anyhow::{Context, Result};
 use argh::FromArgs;
-use homunculus::Model;
+use homunculus::Husk;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -62,10 +62,10 @@ fn build_homunculus(path: &Path, stem: &OsStr) -> Result<PathBuf> {
     let file = File::open(path)
         .with_context(|| format!("{} not found", path.display()))?;
     let def: ModelDef = muon_rs::from_reader(file).context("Invalid model")?;
-    let model = Model::try_from(&def).context("Invalid model")?;
+    let husk = Husk::try_from(&def).context("Invalid model")?;
     let out = path.with_file_name(Path::new(stem).with_extension("glb"));
     let writer = File::create(&out)
         .with_context(|| format!("Cannot create {}", out.display()))?;
-    model.write_gltf(&writer).context("Writing glTF")?;
+    husk.write_gltf(&writer).context("Writing glTF")?;
     Ok(out)
 }

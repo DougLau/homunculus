@@ -1,35 +1,14 @@
-// model.rs     Model module
+// husk.rs     Husk module
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
 use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
-use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
+use crate::ring::{Degrees, Ring};
+use glam::{Affine3A, Quat, Vec3};
 use std::collections::HashMap;
-use std::f32::consts::PI;
 use std::io::Write;
-use std::ops::Add;
-
-/// Angular degrees
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-struct Degrees(u16);
-
-/// Ring point
-///
-/// A point on a [Ring] with distance from the central axis.  An optional label
-/// can be declared for a [branch] point.
-///
-/// [branch]: struct.Model.html#method.branch
-/// [ring]: struct.Ring.html
-#[derive(Clone, Debug)]
-pub struct RingPoint {
-    /// Distance from axis
-    distance: f32,
-
-    /// Branch label
-    branch: Option<String>,
-}
 
 /// Point type
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -41,7 +20,7 @@ enum Pt {
     Branch(String),
 }
 
-/// A point on model surface
+/// A point on a husk
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Point {
     /// Degrees around ring (must be first for `Ord`)
@@ -54,28 +33,7 @@ struct Point {
     pt_type: Pt,
 }
 
-/// Ring around a [Model] hull
-///
-/// [model]: struct.Model.html
-#[derive(Clone, Debug, Default)]
-pub struct Ring {
-    /// Ring ID
-    id: usize,
-
-    /// Axis vector
-    axis: Option<Vec3>,
-
-    /// Ring points
-    points: Vec<RingPoint>,
-
-    /// Scale factor
-    scale: Option<f32>,
-
-    /// Edge smoothing
-    smoothing: Option<Smoothing>,
-}
-
-/// Model edge between two vertices
+/// Edge between two vertices
 #[derive(Clone, Debug)]
 struct Edge(usize, usize);
 
@@ -89,19 +47,23 @@ struct Branch {
     edges: Vec<Edge>,
 }
 
-/// A 3D model
+/// Shell of a 3D model
 ///
-/// A series of [Ring]s defines the hull of a model.
+/// A husk is a series of [Ring]s, possibly branching.
 ///
 /// ```rust
-/// # use homunculus::{Model, Ring};
-/// let mut model = Model::new();
-/// model.ring(Ring::default().point(2.0).point(1.0).point(1.5));
-/// model.ring(Ring::default().point(1.5).point(1.1).point(1.2));
+/// # use homunculus::{Error, Husk, Ring};
+/// # fn main() -> Result<(), Error> {
+/// let mut pyramid = Husk::new();
+/// let base = Ring::default().point(1.0).point(1.0).point(1.0);
+/// pyramid.ring(base)?;
+/// pyramid.ring(Ring::default().point(0.0))?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// [ring]: struct.Ring.html
-pub struct Model {
+pub struct Husk {
     /// Mesh builder
     builder: MeshBuilder,
 
@@ -119,181 +81,6 @@ pub struct Model {
 
     /// Mapping of labels to branches
     branches: HashMap<String, Branch>,
-}
-
-impl From<f32> for Degrees {
-    fn from(angle: f32) -> Self {
-        let deg = angle.to_degrees().rem_euclid(360.0);
-        Degrees(deg.round() as u16)
-    }
-}
-
-impl Add for Degrees {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Degrees(self.0 + rhs.0 % 360)
-    }
-}
-
-impl Default for RingPoint {
-    fn default() -> Self {
-        RingPoint::from(1.0)
-    }
-}
-
-impl From<f32> for RingPoint {
-    fn from(distance: f32) -> Self {
-        RingPoint {
-            distance,
-            branch: None,
-        }
-    }
-}
-
-impl From<&str> for RingPoint {
-    fn from(branch: &str) -> Self {
-        RingPoint {
-            distance: 1.0,
-            branch: Some(branch.to_string()),
-        }
-    }
-}
-
-impl From<(f32, &str)> for RingPoint {
-    fn from(val: (f32, &str)) -> Self {
-        RingPoint {
-            distance: val.0,
-            branch: Some(val.1.to_string()),
-        }
-    }
-}
-
-impl Ring {
-    /// Create a new branch ring
-    fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
-        Ring {
-            id,
-            axis: Some(axis),
-            points: vec![RingPoint::default(); pts],
-            scale: None,
-            smoothing: None,
-        }
-    }
-
-    /// Set ring axis
-    pub fn axis(mut self, axis: Option<Vec3>) -> Self {
-        self.axis = axis;
-        self
-    }
-
-    /// Set ring scale
-    pub fn scale(mut self, scale: Option<f32>) -> Self {
-        self.scale = scale;
-        self
-    }
-
-    /// Set smooth edges
-    pub fn smooth(mut self) -> Self {
-        self.smoothing = Some(Smoothing::Smooth);
-        self
-    }
-
-    /// Set flat edges
-    pub fn flat(mut self) -> Self {
-        self.smoothing = Some(Smoothing::Flat);
-        self
-    }
-
-    /// Get the ring axis (or default value)
-    fn axis_or_default(&self) -> Vec3 {
-        self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
-    }
-
-    /// Get the ring scale (or default value)
-    fn scale_or_default(&self) -> f32 {
-        self.scale.unwrap_or(1.0)
-    }
-
-    /// Get the edge smoothing (or default value)
-    fn smoothing_or_default(&self) -> Smoothing {
-        self.smoothing.unwrap_or(Smoothing::Flat)
-    }
-
-    /// Update with another ring
-    fn update_with(mut self, ring: &Self) -> Self {
-        if ring.axis.is_some() {
-            self.axis = ring.axis;
-        }
-        if !ring.points.is_empty() {
-            self.points = ring.points.clone();
-        }
-        if ring.scale.is_some() {
-            self.scale = ring.scale;
-        }
-        if ring.smoothing.is_some() {
-            self.smoothing = ring.smoothing;
-        }
-        self
-    }
-
-    /// Add a ring / [branch] point
-    ///
-    /// ```rust
-    /// # use homunculus::Ring;
-    /// let ring = Ring::default()
-    ///     .point(2.0)
-    ///     .point(2.7)
-    ///     .point("branch A")
-    ///     .point((1.6, "branch A"))
-    ///     .point(1.8);
-    /// ```
-    /// [branch]: struct.Model.html#method.branch
-    pub fn point<P: Into<RingPoint>>(mut self, pt: P) -> Self {
-        self.points.push(pt.into());
-        self
-    }
-
-    /// Get half step in degrees
-    fn half_step(&self) -> Degrees {
-        let deg = 180 / self.points.len();
-        Degrees(deg as u16)
-    }
-
-    /// Calculate the angle of a point
-    fn angle(&self, i: usize) -> f32 {
-        2.0 * PI * i as f32 / self.points.len() as f32
-    }
-
-    /// Translate a transform from axis
-    fn transform_translate(&self, xform: &mut Affine3A) {
-        xform.translation +=
-            xform.matrix3.mul_vec3a(Vec3A::from(self.axis_or_default()));
-    }
-
-    /// Rotate a transform from axis
-    fn transform_rotate(&mut self, xform: &mut Affine3A) {
-        if let Some(axis) = self.axis {
-            let length = axis.length();
-            let axis = axis.normalize();
-            if axis.x != 0.0 {
-                // project to XY plane, then rotate around Z axis
-                let up = Vec2::new(0.0, 1.0);
-                let proj = Vec2::new(axis.x, axis.y);
-                let angle = up.angle_between(proj) * proj.length();
-                xform.matrix3 *= Mat3A::from_rotation_z(angle);
-            }
-            if axis.z != 0.0 {
-                // project to YZ plane, then rotate around X axis
-                let up = Vec2::new(1.0, 0.0);
-                let proj = Vec2::new(axis.y, axis.z);
-                let angle = up.angle_between(proj) * proj.length();
-                xform.matrix3 *= Mat3A::from_rotation_x(angle);
-            }
-            // adjust axis after rotation applied
-            self.axis = Some(Vec3::new(0.0, length, 0.0));
-        }
-    }
 }
 
 impl Branch {
@@ -342,16 +129,16 @@ impl Branch {
     }
 }
 
-impl Default for Model {
+impl Default for Husk {
     fn default() -> Self {
-        Model::new()
+        Husk::new()
     }
 }
 
-impl Model {
-    /// Create a new 3D model
-    pub fn new() -> Model {
-        Model {
+impl Husk {
+    /// Create a new husk
+    pub fn new() -> Husk {
+        Husk {
             builder: Mesh::builder(),
             ring_id: 0,
             xform: Affine3A::IDENTITY,
@@ -361,24 +148,19 @@ impl Model {
         }
     }
 
-    /// Get the current ring ID
-    fn ring_id(&self) -> usize {
-        self.ring_id
-    }
-
     /// Add internal branch vertex
-    fn add_branch_vertex(&mut self, branch: &str, pos: Vec3) {
-        if !self.branches.contains_key(branch) {
-            self.branches.insert(branch.to_string(), Branch::new());
+    fn add_branch_vertex(&mut self, label: &str, pos: Vec3) {
+        if !self.branches.contains_key(label) {
+            self.branches.insert(label.to_string(), Branch::new());
         }
         // unwrap can never panic because of contains_key test
-        let branch = self.branches.get_mut(branch).unwrap();
+        let branch = self.branches.get_mut(label).unwrap();
         branch.internal.push(pos);
     }
 
     /// Push one point
     fn push_pt(&mut self, order_deg: Degrees, pt_type: Pt) {
-        let ring_id = self.ring_id();
+        let ring_id = self.ring_id;
         self.points.push(Point {
             order_deg,
             ring_id,
@@ -388,21 +170,21 @@ impl Model {
 
     /// Add points for a ring
     fn add_ring_points(&mut self, ring: &Ring) {
-        for (i, ptd) in ring.points.iter().enumerate() {
+        for (i, rpt) in ring.points().enumerate() {
             let angle = ring.angle(i);
             let order_deg = Degrees::from(angle);
             let rot = Quat::from_rotation_y(angle);
             let pos = rot
-                * Vec3::new(ptd.distance * ring.scale_or_default(), 0.0, 0.0);
+                * Vec3::new(rpt.distance * ring.scale_or_default(), 0.0, 0.0);
             let pos = self.xform.transform_point3(pos);
-            match &ptd.branch {
+            match &rpt.label {
                 None => {
                     let vid = self.builder.push_vtx(pos);
                     self.push_pt(order_deg, Pt::Vertex(vid));
                 }
-                Some(branch) => {
-                    self.add_branch_vertex(branch, pos);
-                    self.push_pt(order_deg, Pt::Branch(branch.into()))
+                Some(label) => {
+                    self.add_branch_vertex(label, pos);
+                    self.push_pt(order_deg, Pt::Branch(label.into()))
                 }
             }
         }
@@ -413,14 +195,14 @@ impl Model {
         let pring = self.ring.take();
         let mut ring = match &pring {
             Some(pr) => {
-                let mut ring = pr.clone().update_with(&ring);
+                let mut ring = pr.with_ring(&ring);
                 ring.transform_translate(&mut self.xform);
                 ring.transform_rotate(&mut self.xform);
                 ring
             }
             None => ring,
         };
-        ring.id = self.ring_id();
+        ring.id = self.ring_id;
         self.ring = Some(ring.clone());
         self.add_ring_points(&ring);
         if let Some(pring) = &pring {
@@ -448,7 +230,7 @@ impl Model {
         // add cap center point
         let pos = self.xform.transform_point3(Vec3::ZERO);
         let vid = self.builder.push_vtx(pos);
-        ring.id = self.ring_id();
+        ring.id = self.ring_id;
         self.push_pt(Degrees(0), Pt::Vertex(vid));
         let center = self.points.last().unwrap().clone();
         let mut prev = last.clone();
@@ -469,7 +251,7 @@ impl Model {
     ) -> Result<()> {
         self.cap()?;
         let label = label.as_ref();
-        let id = self.ring_id();
+        let id = self.ring_id;
         let (center, len) = self.branch_center_vertices(label)?;
         self.xform = Affine3A::from_translation(center);
         // start with base of branch
@@ -625,13 +407,13 @@ impl Model {
                 let face = Face::new([*v0, *v1, *v2], smoothing);
                 self.builder.push_face(face);
             }
-            (Pt::Branch(b), Pt::Vertex(v0), Pt::Vertex(v1))
-            | (Pt::Vertex(v1), Pt::Branch(b), Pt::Vertex(v0))
-            | (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Branch(b)) => {
+            (Pt::Branch(lbl), Pt::Vertex(v0), Pt::Vertex(v1))
+            | (Pt::Vertex(v1), Pt::Branch(lbl), Pt::Vertex(v0))
+            | (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Branch(lbl)) => {
                 let branch = self
                     .branches
-                    .get_mut(b)
-                    .ok_or_else(|| Error::UnknownBranchLabel(b.into()))?;
+                    .get_mut(lbl)
+                    .ok_or_else(|| Error::UnknownBranchLabel(lbl.into()))?;
                 branch.edges.push(Edge(*v0, *v1));
             }
             (Pt::Vertex(_v), Pt::Branch(b0), Pt::Branch(b1))
@@ -664,15 +446,15 @@ impl Model {
         Ok(())
     }
 
-    /// Write model as [glTF] `.glb`
+    /// Write husk as [glTF] `.glb`
     ///
     /// ```rust,no_run
-    /// # use homunculus::Model;
+    /// # use homunculus::Husk;
     /// # use std::fs::File;
-    /// let mut model = Model::new();
+    /// let mut husk = Husk::new();
     /// // add rings …
-    /// let file = File::create("model.glb").unwrap();
-    /// model.write_gltf(file).unwrap();
+    /// let file = File::create("husk.glb").unwrap();
+    /// husk.write_gltf(file).unwrap();
     /// ```
     ///
     /// [gltf]: https://en.wikipedia.org/wiki/GlTF
