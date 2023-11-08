@@ -38,7 +38,7 @@ struct Point {
 struct Edge(usize, usize);
 
 /// Branch data
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Branch {
     /// Internal connection vertices (non-edge)
     internal: Vec<Vec3>,
@@ -70,9 +70,6 @@ pub struct Husk {
     /// Current ring ID
     ring_id: usize,
 
-    /// Global transform for current ring
-    xform: Affine3A,
-
     /// Current ring
     ring: Option<Ring>,
 
@@ -84,14 +81,6 @@ pub struct Husk {
 }
 
 impl Branch {
-    /// Create a new branch
-    fn new() -> Self {
-        Branch {
-            internal: Vec::new(),
-            edges: Vec::new(),
-        }
-    }
-
     /// Get edge vertices sorted by common end-points
     fn edge_vids(&self, edge: usize) -> Vec<usize> {
         let mut edges = self.edges.to_vec();
@@ -137,11 +126,10 @@ impl Default for Husk {
 
 impl Husk {
     /// Create a new husk
-    pub fn new() -> Husk {
+    pub fn new() -> Self {
         Husk {
             builder: Mesh::builder(),
             ring_id: 0,
-            xform: Affine3A::IDENTITY,
             ring: None,
             points: Vec::new(),
             branches: HashMap::new(),
@@ -151,11 +139,11 @@ impl Husk {
     /// Add internal branch vertex
     fn add_branch_vertex(&mut self, label: &str, pos: Vec3) {
         if !self.branches.contains_key(label) {
-            self.branches.insert(label.to_string(), Branch::new());
+            self.branches.insert(label.to_string(), Branch::default());
         }
-        // unwrap can never panic because of contains_key test
-        let branch = self.branches.get_mut(label).unwrap();
-        branch.internal.push(pos);
+        if let Some(branch) = self.branches.get_mut(label) {
+            branch.internal.push(pos);
+        }
     }
 
     /// Push one point
@@ -176,7 +164,7 @@ impl Husk {
             let rot = Quat::from_rotation_y(angle);
             let pos = rot
                 * Vec3::new(rpt.distance * ring.scale_or_default(), 0.0, 0.0);
-            let pos = self.xform.transform_point3(pos);
+            let pos = ring.xform.transform_point3(pos);
             match &rpt.label {
                 None => {
                     let vid = self.builder.push_vtx(pos);
@@ -196,8 +184,8 @@ impl Husk {
         let mut ring = match &pring {
             Some(pr) => {
                 let mut ring = pr.with_ring(&ring);
-                ring.transform_translate(&mut self.xform);
-                ring.transform_rotate(&mut self.xform);
+                ring.transform_translate();
+                ring.transform_rotate();
                 ring
             }
             None => ring,
@@ -228,7 +216,7 @@ impl Husk {
             return Ok(());
         }
         // add cap center point
-        let pos = self.xform.transform_point3(Vec3::ZERO);
+        let pos = ring.xform.transform_point3(Vec3::ZERO);
         let vid = self.builder.push_vtx(pos);
         ring.id = self.ring_id;
         self.push_pt(Degrees(0), Pt::Vertex(vid));
@@ -252,65 +240,52 @@ impl Husk {
         self.cap()?;
         let label = label.as_ref();
         let id = self.ring_id;
-        let (center, len) = self.branch_center_vertices(label)?;
-        self.xform = Affine3A::from_translation(center);
+        let branch = self.take_branch(label)?;
+        let center = branch.center();
+        let len = branch.edge_vertex_count();
         // start with base of branch
-        let ax = self.branch_axis(label);
+        let ax = self.branch_axis(&branch, center);
         let mut ring = Ring::with_branch(id, ax, len);
-        ring.transform_rotate(&mut self.xform);
+        ring.xform = Affine3A::from_translation(center);
+        ring.transform_rotate();
         if let Some(axis) = axis {
             // modify axis if specified
             ring.axis = Some(axis);
-            ring.transform_rotate(&mut self.xform);
+            ring.transform_rotate();
         }
-        self.ring = Some(ring);
-        for (order_deg, vid) in self.branch_angles(label) {
+        for (order_deg, vid) in self.edge_angles(&branch, &ring) {
             self.push_pt(order_deg, Pt::Vertex(vid));
         }
+        self.ring = Some(ring);
         self.ring_id += 1;
         Ok(())
     }
 
-    /// Get center of a branch base
-    fn branch_center_vertices(&self, label: &str) -> Result<(Vec3, usize)> {
-        match self.branches.get(label) {
-            Some(branch) => {
-                let center = branch.center();
-                let count = branch.edge_vertex_count();
-                Ok((center, count))
-            }
-            None => Err(Error::UnknownBranchLabel(label.into())),
-        }
+    /// Take a branch by label
+    fn take_branch(&mut self, label: &str) -> Result<Branch> {
+        self.branches
+            .remove(label)
+            .ok_or_else(|| Error::UnknownBranchLabel(label.into()))
     }
 
     /// Calculate axis for a branch base
-    fn branch_axis(&self, label: &str) -> Vec3 {
-        let center = self.xform.transform_point3(Vec3::ZERO);
-        match self.branches.get(label) {
-            Some(branch) => {
-                let mut norm = Vec3::ZERO;
-                for edge in &branch.edges {
-                    let v0 = self.builder.vertex(edge.0);
-                    let v1 = self.builder.vertex(edge.1);
-                    norm += (v0 - center).cross(v1 - center);
-                }
-                norm.normalize()
-            }
-            None => Vec3::new(0.0, 1.0, 0.0),
+    fn branch_axis(&self, branch: &Branch, center: Vec3) -> Vec3 {
+        let mut norm = Vec3::ZERO;
+        for edge in &branch.edges {
+            let v0 = self.builder.vertex(edge.0);
+            let v1 = self.builder.vertex(edge.1);
+            norm += (v0 - center).cross(v1 - center);
         }
-    }
-
-    /// Calculate angles for a branch base
-    fn branch_angles(&self, label: &str) -> Vec<(Degrees, usize)> {
-        match self.branches.get(label) {
-            Some(branch) => self.edge_angles(branch),
-            None => Vec::new(),
-        }
+        norm.normalize()
     }
 
     /// Calculate edge angles for a branch base
-    fn edge_angles(&self, branch: &Branch) -> Vec<(Degrees, usize)> {
-        let inverse = self.xform.inverse();
+    fn edge_angles(
+        &self,
+        branch: &Branch,
+        ring: &Ring,
+    ) -> Vec<(Degrees, usize)> {
+        let inverse = ring.xform.inverse();
         let zero_deg = Vec3::new(1.0, 0.0, 0.0);
         // Step 1: find "first" edge vertex (closest to 0 degrees)
         let mut edge = 0;
