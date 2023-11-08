@@ -595,8 +595,16 @@ impl Model {
             }
         }
         // connect with first vertices on band
-        self.add_face([&pt1, &pt0, &first1], ring0.smoothing_or_default())?;
-        self.add_face([&first0, &first1, &pt0], ring0.smoothing_or_default())
+        if pt1 != first1 {
+            self.add_face([&pt1, &pt0, &first1], ring0.smoothing_or_default())?;
+        }
+        if pt0 != first0 {
+            self.add_face(
+                [&first0, &first1, &pt0],
+                ring0.smoothing_or_default(),
+            )?;
+        }
+        Ok(())
     }
 
     /// Add a triangle face

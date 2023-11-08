@@ -64,6 +64,9 @@ pub struct Mesh {
 impl Face {
     /// Create a new face
     pub fn new(vtx: [usize; 3], smoothing: Smoothing) -> Self {
+        debug_assert_ne!(vtx[0], vtx[1]);
+        debug_assert_ne!(vtx[1], vtx[2]);
+        debug_assert_ne!(vtx[2], vtx[0]);
         let edge = [smoothing; 3];
         Self { vtx, edge }
     }
