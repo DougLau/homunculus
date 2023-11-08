@@ -4,7 +4,7 @@
 //
 use anyhow::{anyhow, bail, Error};
 use glam::Vec3;
-use homunculus::{Model, Ring, Smoothing};
+use homunculus::{Model, Ring};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -52,8 +52,12 @@ impl TryFrom<&RingDef> for Ring {
     fn try_from(def: &RingDef) -> Result<Self> {
         let mut ring = Ring::default()
             .axis(def.axis()?)
-            .scale(def.scale)
-            .smoothing(def.smoothing()?);
+            .scale(def.scale);
+        match def.smooth()? {
+            Some(true) => ring = ring.smooth(),
+            Some(false) => ring = ring.flat(),
+            None => (),
+        }
         for pt in def.point_defs()? {
             ring = match pt {
                 PtDef::Distance(d) => ring.point(d),
@@ -131,10 +135,10 @@ impl RingDef {
     }
 
     /// Get edge smoothing
-    fn smoothing(&self) -> Result<Option<Smoothing>> {
+    fn smooth(&self) -> Result<Option<bool>> {
         match self.smoothing.as_deref() {
-            Some("Sharp") => Ok(Some(Smoothing::Sharp)),
-            Some("Smooth") => Ok(Some(Smoothing::Smooth)),
+            Some("Flat") => Ok(Some(false)),
+            Some("Smooth") => Ok(Some(true)),
             Some(s) => bail!("Invalid smoothing: {s}"),
             None => Ok(None),
         }

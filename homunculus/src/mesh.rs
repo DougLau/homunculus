@@ -1,6 +1,6 @@
 // mesh.rs      Mesh module
 //
-// Copyright (c) 2022  Douglas Lau
+// Copyright (c) 2022=2023  Douglas Lau
 //
 use glam::Vec3;
 
@@ -18,8 +18,8 @@ impl From<usize> for Vertex {
 /// Face edge smoothng
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Smoothing {
-    /// Sharp edges
-    Sharp,
+    /// Flat edges
+    Flat,
     /// Smooth edges
     Smooth,
 }
@@ -71,17 +71,17 @@ impl Face {
         Self { vtx, edge }
     }
 
-    /// Check if a vertex is next to a sharp edge
-    fn is_sharp_vertex(&self, idx: usize) -> bool {
+    /// Check if a vertex is next to a flat edge
+    fn is_flat_vertex(&self, idx: usize) -> bool {
         (self.vtx[0] == idx
-            && (self.edge[0] == Smoothing::Sharp
-                || self.edge[2] == Smoothing::Sharp))
+            && (self.edge[0] == Smoothing::Flat
+                || self.edge[2] == Smoothing::Flat))
             || (self.vtx[1] == idx
-                && (self.edge[1] == Smoothing::Sharp
-                    || self.edge[0] == Smoothing::Sharp))
+                && (self.edge[1] == Smoothing::Flat
+                    || self.edge[0] == Smoothing::Flat))
             || (self.vtx[2] == idx
-                && (self.edge[2] == Smoothing::Sharp
-                    || self.edge[1] == Smoothing::Sharp))
+                && (self.edge[2] == Smoothing::Flat
+                    || self.edge[1] == Smoothing::Flat))
     }
 }
 
@@ -134,7 +134,7 @@ impl MeshBuilder {
     fn vertex_needs_split(&self, idx: usize) -> bool {
         let mut found = false;
         for face in &self.faces {
-            if face.is_sharp_vertex(idx) {
+            if face.is_flat_vertex(idx) {
                 if found {
                     return true;
                 }
@@ -149,7 +149,7 @@ impl MeshBuilder {
         let pos = self.pos[idx];
         let i = self.push_vtx(pos);
         for face in &mut self.faces {
-            if face.is_sharp_vertex(idx) {
+            if face.is_flat_vertex(idx) {
                 if face.vtx[0] == idx {
                     face.vtx[0] = i;
                 } else if face.vtx[1] == idx {

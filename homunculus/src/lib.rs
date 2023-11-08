@@ -10,5 +10,4 @@ mod mesh;
 mod model;
 
 pub use error::Error;
-pub use mesh::Smoothing;
 pub use model::{Model, Ring, RingPoint};

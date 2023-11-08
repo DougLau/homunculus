@@ -17,10 +17,11 @@ struct Degrees(u16);
 
 /// Ring point
 ///
-/// A point on a ring with distance from the central axis.  An optional label
+/// A point on a [Ring] with distance from the central axis.  An optional label
 /// can be declared for a [branch] point.
 ///
 /// [branch]: struct.Model.html#method.branch
+/// [ring]: struct.Ring.html
 #[derive(Clone, Debug)]
 pub struct RingPoint {
     /// Distance from axis
@@ -192,9 +193,15 @@ impl Ring {
         self
     }
 
-    /// Set edge smoothing
-    pub fn smoothing(mut self, smoothing: Option<Smoothing>) -> Self {
-        self.smoothing = smoothing;
+    /// Set smooth edges
+    pub fn smooth(mut self) -> Self {
+        self.smoothing = Some(Smoothing::Smooth);
+        self
+    }
+
+    /// Set flat edges
+    pub fn flat(mut self) -> Self {
+        self.smoothing = Some(Smoothing::Flat);
         self
     }
 
@@ -210,7 +217,7 @@ impl Ring {
 
     /// Get the edge smoothing (or default value)
     fn smoothing_or_default(&self) -> Smoothing {
-        self.smoothing.unwrap_or(Smoothing::Smooth)
+        self.smoothing.unwrap_or(Smoothing::Flat)
     }
 
     /// Update with another ring

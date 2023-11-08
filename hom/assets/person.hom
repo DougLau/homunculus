@@ -1,6 +1,7 @@
 # Torso
 ring:
   points: 1 0.6 0.5 0.6 1 0.6 0.5 0.6
+  smoothing: Smooth
 ring:
 ring:
   points: 1 0.6 0.5 0.6 1 0.7 0.6 0.7
@@ -11,11 +12,13 @@ ring:
   axis: 0 0.3 0
   points: 0.8 0.6 0.5 0.6 0.8 0.9 1 0.9
   scale: 0.4
+  smoothing: Smooth
 # Head
 ring:
   axis: 0 0.3 0
   points: 0.6 0.6 0.5 0.6 0.6 0.9 1 0.9
   scale: 0.8
+  smoothing: Smooth
 ring:
   scale: 0.9
 ring:
@@ -31,6 +34,7 @@ ring:
   axis: 0 0.05 0
   points: 1.4 1 * 5
   scale: 0.4
+  smoothing: Smooth
 ring:
   axis: 0.4 0.4 0
   points: 1 * 6
@@ -45,6 +49,7 @@ ring:
   axis: 0 0.05 0
   points: 1 1 1 1.4 1 1
   scale: 0.4
+  smoothing: Smooth
 ring:
   axis: -0.4 0.4 0
   points: 1 * 6
