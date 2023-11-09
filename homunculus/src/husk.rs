@@ -187,16 +187,12 @@ impl Husk {
     ) -> Result<()> {
         self.cap()?;
         let label = label.as_ref();
-        let id = self.ring_id;
         let branch = self.take_branch(label)?;
-        let center = branch.center();
-        // start with base of branch
-        let ax = self.branch_axis(&branch, center);
-        let mut ring = Ring::with_branch(&branch, ax);
-        ring.id = id;
+        let mut ring = Ring::with_branch(&branch, &self.builder);
+        ring.id = self.ring_id;
         ring.transform_rotate();
+        // modify axis if specified
         if let Some(axis) = axis {
-            // modify axis if specified
             ring.axis = Some(axis);
             ring.transform_rotate();
         }
@@ -213,17 +209,6 @@ impl Husk {
         self.branches
             .remove(label)
             .ok_or_else(|| Error::UnknownBranchLabel(label.into()))
-    }
-
-    /// Calculate axis for a branch base
-    fn branch_axis(&self, branch: &Branch, center: Vec3) -> Vec3 {
-        let mut norm = Vec3::ZERO;
-        for edge in branch.edges() {
-            let v0 = self.builder.vertex(edge.0);
-            let v1 = self.builder.vertex(edge.1);
-            norm += (v0 - center).cross(v1 - center);
-        }
-        norm.normalize()
     }
 
     /// Calculate edge angles for a branch base

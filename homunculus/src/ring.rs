@@ -2,7 +2,7 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
-use crate::mesh::Smoothing;
+use crate::mesh::{MeshBuilder, Smoothing};
 use glam::{Affine3A, Mat3A, Vec2, Vec3, Vec3A};
 use std::f32::consts::PI;
 use std::ops::Add;
@@ -123,7 +123,8 @@ impl From<(f32, &str)> for RingPoint {
 
 impl Ring {
     /// Create a new branch ring
-    pub(crate) fn with_branch(branch: &Branch, axis: Vec3) -> Self {
+    pub(crate) fn with_branch(branch: &Branch, builder: &MeshBuilder) -> Self {
+        let axis = branch.axis(builder);
         let center = branch.center();
         let xform = Affine3A::from_translation(center);
         let count = branch.edge_vertex_count();
@@ -280,6 +281,18 @@ impl Branch {
     /// Push an internal point
     pub fn push_internal(&mut self, pos: Vec3) {
         self.internal.push(pos);
+    }
+
+    /// Calculate branch base axis
+    pub fn axis(&self, builder: &MeshBuilder) -> Vec3 {
+        let center = self.center();
+        let mut norm = Vec3::ZERO;
+        for edge in self.edges() {
+            let v0 = builder.vertex(edge.0);
+            let v1 = builder.vertex(edge.1);
+            norm += (v0 - center).cross(v1 - center);
+        }
+        norm.normalize()
     }
 
     /// Get edge vertices sorted by common end-points
