@@ -43,10 +43,10 @@ pub struct Ring {
     /// Ring ID
     pub(crate) id: usize,
 
-    /// Axis vector
-    axis: Option<Vec3>,
+    /// Ring spacing length
+    length: Option<f32>,
 
-    /// Global transform
+    /// Global-to-local transform
     pub(crate) xform: Affine3A,
 
     /// Ring points
@@ -130,18 +130,19 @@ impl Ring {
         let count = branch.edge_vertex_count();
         let mut ring = Ring {
             id: 0,
-            axis: Some(axis),
+            length: None,
             xform,
             points: vec![RingPoint::default(); count],
             scale: None,
             smoothing: None,
         };
-        ring.transform_rotate();
+        ring.transform_rotate(axis);
         ring
     }
 
     /// Create a ring updated with another ring
     pub(crate) fn with_ring(&self, ring: &Self) -> Self {
+        let length = ring.length.or(self.length);
         let points = if ring.points.is_empty() {
             self.points.clone()
         } else {
@@ -149,21 +150,19 @@ impl Ring {
         };
         let mut ring = Ring {
             id: self.id,
-            axis: ring.axis.or(self.axis),
+            length,
             xform: self.xform * ring.xform,
             points,
             scale: ring.scale.or(self.scale),
             smoothing: ring.smoothing.or(self.smoothing),
         };
         ring.transform_translate();
-        ring.transform_rotate();
         ring
     }
 
     /// Set ring axis
     pub fn axis(mut self, axis: Vec3) -> Self {
-        self.axis = Some(axis);
-        self.transform_rotate();
+        self.transform_rotate(axis);
         self
     }
 
@@ -183,11 +182,6 @@ impl Ring {
     pub fn flat(mut self) -> Self {
         self.smoothing = Some(Smoothing::Flat);
         self
-    }
-
-    /// Get the ring axis (or default value)
-    fn axis_or_default(&self) -> Vec3 {
-        self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
     /// Get the ring scale (or default value)
@@ -247,33 +241,28 @@ impl Ring {
 
     /// Translate a transform from axis
     fn transform_translate(&mut self) {
-        self.xform.translation += self
-            .xform
-            .matrix3
-            .mul_vec3a(Vec3A::from(self.axis_or_default()));
+        let length = self.length.unwrap_or(1.0);
+        let axis = Vec3A::new(0.0, length, 0.0);
+        self.xform.translation += self.xform.matrix3.mul_vec3a(axis);
     }
 
     /// Rotate a transform from axis
-    fn transform_rotate(&mut self) {
-        if let Some(axis) = self.axis {
-            let length = axis.length();
-            let axis = axis.normalize();
-            if axis.x != 0.0 {
-                // project to XY plane, then rotate around Z axis
-                let up = Vec2::new(0.0, 1.0);
-                let proj = Vec2::new(axis.x, axis.y);
-                let angle = up.angle_between(proj) * proj.length();
-                self.xform.matrix3 *= Mat3A::from_rotation_z(angle);
-            }
-            if axis.z != 0.0 {
-                // project to YZ plane, then rotate around X axis
-                let up = Vec2::new(1.0, 0.0);
-                let proj = Vec2::new(axis.y, axis.z);
-                let angle = up.angle_between(proj) * proj.length();
-                self.xform.matrix3 *= Mat3A::from_rotation_x(angle);
-            }
-            // adjust axis after rotation applied
-            self.axis = Some(Vec3::new(0.0, length, 0.0));
+    fn transform_rotate(&mut self, axis: Vec3) {
+        self.length = Some(axis.length());
+        let axis = axis.normalize();
+        if axis.x != 0.0 {
+            // project to XY plane, then rotate around Z axis
+            let up = Vec2::new(0.0, 1.0);
+            let proj = Vec2::new(axis.x, axis.y);
+            let angle = up.angle_between(proj) * proj.length();
+            self.xform.matrix3 *= Mat3A::from_rotation_z(angle);
+        }
+        if axis.z != 0.0 {
+            // project to YZ plane, then rotate around X axis
+            let up = Vec2::new(1.0, 0.0);
+            let proj = Vec2::new(axis.y, axis.z);
+            let angle = up.angle_between(proj) * proj.length();
+            self.xform.matrix3 *= Mat3A::from_rotation_x(angle);
         }
     }
 }
