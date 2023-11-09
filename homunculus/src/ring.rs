@@ -44,7 +44,7 @@ pub struct Ring {
     pub(crate) id: usize,
 
     /// Axis vector
-    pub(crate) axis: Option<Vec3>,
+    axis: Option<Vec3>,
 
     /// Global transform
     pub(crate) xform: Affine3A,
@@ -128,14 +128,16 @@ impl Ring {
         let center = branch.center();
         let xform = Affine3A::from_translation(center);
         let count = branch.edge_vertex_count();
-        Ring {
+        let mut ring = Ring {
             id: 0,
             axis: Some(axis),
             xform,
             points: vec![RingPoint::default(); count],
             scale: None,
             smoothing: None,
-        }
+        };
+        ring.transform_rotate();
+        ring
     }
 
     /// Create a ring updated with another ring
@@ -145,25 +147,29 @@ impl Ring {
         } else {
             ring.points.clone()
         };
-        Ring {
+        let mut ring = Ring {
             id: self.id,
             axis: ring.axis.or(self.axis),
-            xform: self.xform,
+            xform: self.xform * ring.xform,
             points,
             scale: ring.scale.or(self.scale),
             smoothing: ring.smoothing.or(self.smoothing),
-        }
+        };
+        ring.transform_translate();
+        ring.transform_rotate();
+        ring
     }
 
     /// Set ring axis
-    pub fn axis(mut self, axis: Option<Vec3>) -> Self {
-        self.axis = axis;
+    pub fn axis(mut self, axis: Vec3) -> Self {
+        self.axis = Some(axis);
+        self.transform_rotate();
         self
     }
 
     /// Set ring scale
-    pub fn scale(mut self, scale: Option<f32>) -> Self {
-        self.scale = scale;
+    pub fn scale(mut self, scale: f32) -> Self {
+        self.scale = Some(scale);
         self
     }
 
@@ -180,7 +186,7 @@ impl Ring {
     }
 
     /// Get the ring axis (or default value)
-    pub(crate) fn axis_or_default(&self) -> Vec3 {
+    fn axis_or_default(&self) -> Vec3 {
         self.axis.unwrap_or_else(|| Vec3::new(0.0, 1.0, 0.0))
     }
 
@@ -240,7 +246,7 @@ impl Ring {
     }
 
     /// Translate a transform from axis
-    pub(crate) fn transform_translate(&mut self) {
+    fn transform_translate(&mut self) {
         self.xform.translation += self
             .xform
             .matrix3
@@ -248,7 +254,7 @@ impl Ring {
     }
 
     /// Rotate a transform from axis
-    pub(crate) fn transform_rotate(&mut self) {
+    fn transform_rotate(&mut self) {
         if let Some(axis) = self.axis {
             let length = axis.length();
             let axis = axis.normalize();

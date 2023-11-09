@@ -50,9 +50,13 @@ impl TryFrom<&RingDef> for Ring {
     type Error = Error;
 
     fn try_from(def: &RingDef) -> Result<Self> {
-        let mut ring = Ring::default()
-            .axis(def.axis()?)
-            .scale(def.scale);
+        let mut ring = Ring::default();
+        if let Some(axis) = def.axis()? {
+            ring = ring.axis(axis);
+        }
+        if let Some(scale) = def.scale {
+            ring = ring.scale(scale);
+        }
         match def.smooth()? {
             Some(true) => ring = ring.smooth(),
             Some(false) => ring = ring.flat(),

@@ -126,16 +126,17 @@ impl Husk {
         }
     }
 
-    /// Add a ring
+    /// Add a ring to the current branch
+    ///
+    /// All unset properties are copied from the previous ring:
+    /// - axis
+    /// - scale
+    /// - smoothing
+    /// - points
     pub fn ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
         let mut ring = match &pring {
-            Some(pr) => {
-                let mut ring = pr.with_ring(&ring);
-                ring.transform_translate();
-                ring.transform_rotate();
-                ring
-            }
+            Some(pr) => pr.with_ring(&ring),
             None => ring,
         };
         ring.id = self.ring_id;
@@ -189,13 +190,10 @@ impl Husk {
         let label = label.as_ref();
         let branch = self.take_branch(label)?;
         let mut ring = Ring::with_branch(&branch, &self.builder);
-        ring.id = self.ring_id;
-        ring.transform_rotate();
-        // modify axis if specified
         if let Some(axis) = axis {
-            ring.axis = Some(axis);
-            ring.transform_rotate();
+            ring = ring.axis(axis);
         }
+        ring.id = self.ring_id;
         for (order_deg, vid) in self.edge_angles(&branch, &ring) {
             self.push_pt(order_deg, Pt::Vertex(vid));
         }
