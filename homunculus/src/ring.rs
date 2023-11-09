@@ -59,6 +59,20 @@ pub struct Ring {
     smoothing: Option<Smoothing>,
 }
 
+/// Edge between two vertices
+#[derive(Clone, Copy, Debug)]
+pub struct Edge(pub usize, pub usize);
+
+/// Branch data
+#[derive(Debug, Default)]
+pub struct Branch {
+    /// Internal connection vertices (non-edge)
+    internal: Vec<Vec3>,
+
+    /// Edges at base of branch
+    edges: Vec<Edge>,
+}
+
 impl From<f32> for Degrees {
     fn from(angle: f32) -> Self {
         let deg = angle.to_degrees().rem_euclid(360.0);
@@ -109,12 +123,15 @@ impl From<(f32, &str)> for RingPoint {
 
 impl Ring {
     /// Create a new branch ring
-    pub(crate) fn with_branch(id: usize, axis: Vec3, pts: usize) -> Self {
+    pub(crate) fn with_branch(branch: &Branch, axis: Vec3) -> Self {
+        let center = branch.center();
+        let xform = Affine3A::from_translation(center);
+        let count = branch.edge_vertex_count();
         Ring {
-            id,
+            id: 0,
             axis: Some(axis),
-            xform: Affine3A::IDENTITY,
-            points: vec![RingPoint::default(); pts],
+            xform,
+            points: vec![RingPoint::default(); count],
             scale: None,
             smoothing: None,
         }
@@ -251,5 +268,58 @@ impl Ring {
             // adjust axis after rotation applied
             self.axis = Some(Vec3::new(0.0, length, 0.0));
         }
+    }
+}
+
+impl Branch {
+    /// Push an edge
+    pub fn push_edge(&mut self, v0: usize, v1: usize) {
+        self.edges.push(Edge(v0, v1));
+    }
+
+    /// Push an internal point
+    pub fn push_internal(&mut self, pos: Vec3) {
+        self.internal.push(pos);
+    }
+
+    /// Get edge vertices sorted by common end-points
+    pub fn edge_vids(&self, edge: usize) -> Vec<usize> {
+        let mut edges = self.edges.to_vec();
+        if edge > 0 {
+            edges.swap(0, edge);
+        }
+        let mut vid = edges[0].1;
+        for i in 1..edges.len() {
+            for j in (i + 1)..edges.len() {
+                if vid == edges[j].0 {
+                    edges.swap(i, j);
+                }
+            }
+            vid = edges[i].1;
+        }
+        edges.into_iter().map(|e| e.0).collect()
+    }
+
+    /// Get center of internal vertices
+    pub fn center(&self) -> Vec3 {
+        let len = self.internal.len() as f32;
+        self.internal.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
+    }
+
+    /// Get an iterator of branch edges
+    pub fn edges(&self) -> impl Iterator<Item = &Edge> {
+        self.edges.iter()
+    }
+
+    /// Get count of vertices on edges
+    fn edge_vertex_count(&self) -> usize {
+        let mut vertices = self
+            .edges
+            .iter()
+            .flat_map(|e| [e.0, e.1].into_iter())
+            .collect::<Vec<usize>>();
+        vertices.sort();
+        vertices.dedup();
+        vertices.len()
     }
 }

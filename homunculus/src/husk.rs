@@ -5,8 +5,8 @@
 use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
-use crate::ring::{Degrees, Ring};
-use glam::{Affine3A, Quat, Vec3};
+use crate::ring::{Branch, Degrees, Ring};
+use glam::{Quat, Vec3};
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -31,20 +31,6 @@ struct Point {
 
     /// Point type
     pt_type: Pt,
-}
-
-/// Edge between two vertices
-#[derive(Clone, Debug)]
-struct Edge(usize, usize);
-
-/// Branch data
-#[derive(Debug, Default)]
-struct Branch {
-    /// Internal connection vertices (non-edge)
-    internal: Vec<Vec3>,
-
-    /// Edges at base of branch
-    edges: Vec<Edge>,
 }
 
 /// Shell of a 3D model
@@ -80,44 +66,6 @@ pub struct Husk {
     branches: HashMap<String, Branch>,
 }
 
-impl Branch {
-    /// Get edge vertices sorted by common end-points
-    fn edge_vids(&self, edge: usize) -> Vec<usize> {
-        let mut edges = self.edges.to_vec();
-        if edge > 0 {
-            edges.swap(0, edge);
-        }
-        let mut vid = edges[0].1;
-        for i in 1..edges.len() {
-            for j in (i + 1)..edges.len() {
-                if vid == edges[j].0 {
-                    edges.swap(i, j);
-                }
-            }
-            vid = edges[i].1;
-        }
-        edges.into_iter().map(|e| e.0).collect()
-    }
-
-    /// Get center of internal vertices
-    fn center(&self) -> Vec3 {
-        let len = self.internal.len() as f32;
-        self.internal.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
-    }
-
-    /// Get count of vertices on edges
-    fn edge_vertex_count(&self) -> usize {
-        let mut vertices = self
-            .edges
-            .iter()
-            .flat_map(|e| [e.0, e.1].into_iter())
-            .collect::<Vec<usize>>();
-        vertices.sort();
-        vertices.dedup();
-        vertices.len()
-    }
-}
-
 impl Default for Husk {
     fn default() -> Self {
         Husk::new()
@@ -142,7 +90,7 @@ impl Husk {
             self.branches.insert(label.to_string(), Branch::default());
         }
         if let Some(branch) = self.branches.get_mut(label) {
-            branch.internal.push(pos);
+            branch.push_internal(pos);
         }
     }
 
@@ -242,11 +190,10 @@ impl Husk {
         let id = self.ring_id;
         let branch = self.take_branch(label)?;
         let center = branch.center();
-        let len = branch.edge_vertex_count();
         // start with base of branch
         let ax = self.branch_axis(&branch, center);
-        let mut ring = Ring::with_branch(id, ax, len);
-        ring.xform = Affine3A::from_translation(center);
+        let mut ring = Ring::with_branch(&branch, ax);
+        ring.id = id;
         ring.transform_rotate();
         if let Some(axis) = axis {
             // modify axis if specified
@@ -271,7 +218,7 @@ impl Husk {
     /// Calculate axis for a branch base
     fn branch_axis(&self, branch: &Branch, center: Vec3) -> Vec3 {
         let mut norm = Vec3::ZERO;
-        for edge in &branch.edges {
+        for edge in branch.edges() {
             let v0 = self.builder.vertex(edge.0);
             let v1 = self.builder.vertex(edge.1);
             norm += (v0 - center).cross(v1 - center);
@@ -290,7 +237,7 @@ impl Husk {
         // Step 1: find "first" edge vertex (closest to 0 degrees)
         let mut edge = 0;
         let mut angle = f32::MAX;
-        for (i, ed) in branch.edges.iter().enumerate() {
+        for (i, ed) in branch.edges().enumerate() {
             let vid = ed.0;
             let pos = inverse.transform_point3(self.builder.vertex(vid));
             let pos = Vec3::new(pos.x, 0.0, pos.z);
@@ -389,7 +336,7 @@ impl Husk {
                     .branches
                     .get_mut(lbl)
                     .ok_or_else(|| Error::UnknownBranchLabel(lbl.into()))?;
-                branch.edges.push(Edge(*v0, *v1));
+                branch.push_edge(*v0, *v1);
             }
             (Pt::Vertex(_v), Pt::Branch(b0), Pt::Branch(b1))
             | (Pt::Branch(b0), Pt::Vertex(_v), Pt::Branch(b1))
