@@ -46,13 +46,13 @@ pub struct Ring {
     /// Spacing to next ring
     spacing: Option<f32>,
 
-    /// Global-to-local transform
+    /// Local-to-global transform
     pub(crate) xform: Affine3A,
 
-    /// Ring spokes
+    /// Spokes from center to ring
     spokes: Vec<Spoke>,
 
-    /// Scale factor
+    /// Spoke scale factor
     scale: Option<f32>,
 
     /// Edge smoothing
