@@ -115,6 +115,7 @@ impl Husk {
     /// Add a cap face on the given ring
     fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
         let mut pts = self.ring_points(&ring, Degrees(0));
+        // unwrap note: ring will always have at least one point
         let last = pts.pop().unwrap();
         if pts.len() < 2 {
             return Ok(());
@@ -200,7 +201,7 @@ impl Husk {
         angles
     }
 
-    /// Get the points for one ring
+    /// Get the points for one ring in descending order
     fn ring_points(&self, ring: &Ring, hs_other: Degrees) -> Vec<Point> {
         let mut pts = Vec::new();
         for point in ring.points() {
@@ -218,6 +219,7 @@ impl Husk {
         // get points for each ring
         let mut pts0 = self.ring_points(ring0, ring1.half_step());
         let mut pts1 = self.ring_points(ring1, ring0.half_step());
+        // unwrap note: ring will always have at least one point
         let first0 = pts0.pop().unwrap();
         let first1 = pts1.pop().unwrap();
         let mut band = Vec::with_capacity(pts0.len() + pts1.len());
