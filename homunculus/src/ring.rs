@@ -9,7 +9,7 @@ use std::ops::Add;
 
 /// Angular degrees
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub(crate) struct Degrees(pub u16);
+pub struct Degrees(pub u16);
 
 /// Ring spoke
 ///
@@ -33,6 +33,26 @@ const EMPTY_RING: &[Spoke] = &[Spoke {
     label: None,
 }];
 
+/// Point type
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pt {
+    /// Vertex index
+    Vertex(usize),
+
+    /// Branch label
+    Branch(String, Vec3),
+}
+
+/// A point on a ring
+#[derive(Clone, Debug, PartialEq)]
+pub struct Point {
+    /// Point type
+    pub pt: Pt,
+
+    /// Degrees around ring
+    pub order: Degrees,
+}
+
 /// Ring around a [Husk]
 ///
 /// Points are distributed evenly around the ring.
@@ -40,9 +60,6 @@ const EMPTY_RING: &[Spoke] = &[Spoke {
 /// [husk]: struct.Husk.html
 #[derive(Clone, Debug, Default)]
 pub struct Ring {
-    /// Ring ID
-    pub(crate) id: usize,
-
     /// Spacing to next ring
     spacing: Option<f32>,
 
@@ -57,6 +74,9 @@ pub struct Ring {
 
     /// Edge smoothing
     smoothing: Option<Smoothing>,
+
+    /// Points on ring
+    points: Vec<Point>,
 }
 
 /// Edge between two vertices
@@ -66,7 +86,7 @@ pub struct Edge(pub usize, pub usize);
 /// Branch data
 #[derive(Debug, Default)]
 pub struct Branch {
-    /// Internal connection vertices (non-edge)
+    /// Internal connection points (non-edge)
     internal: Vec<Vec3>,
 
     /// Edges at base of branch
@@ -124,17 +144,17 @@ impl From<(f32, &str)> for Spoke {
 impl Ring {
     /// Create a new branch ring
     pub(crate) fn with_branch(branch: &Branch, builder: &MeshBuilder) -> Self {
-        let axis = branch.axis(builder);
         let center = branch.center();
+        let axis = branch.axis(builder, center);
         let xform = Affine3A::from_translation(center);
         let count = branch.edge_vertex_count();
         let mut ring = Ring {
-            id: 0,
             spacing: None,
             xform,
             spokes: vec![Spoke::default(); count],
             scale: None,
             smoothing: None,
+            points: Vec::new(),
         };
         ring.transform_rotate(axis);
         ring
@@ -149,12 +169,12 @@ impl Ring {
             ring.spokes.clone()
         };
         let mut ring = Ring {
-            id: self.id,
             spacing,
             xform: self.xform * ring.xform,
             spokes,
             scale: ring.scale.or(self.scale),
             smoothing: ring.smoothing.or(self.smoothing),
+            points: Vec::new(),
         };
         ring.transform_translate();
         ring
@@ -269,16 +289,12 @@ impl Ring {
     }
 
     /// Make a point for the given spoke
-    pub(crate) fn make_point(
-        &self,
-        i: usize,
-        spoke: &Spoke,
-    ) -> (Degrees, Vec3) {
+    fn make_point(&self, i: usize, spoke: &Spoke) -> (Degrees, Vec3) {
         let angle = self.angle(i);
         let order = Degrees::from(angle);
         let rot = Quat::from_rotation_y(angle);
-        let pos =
-            rot * Vec3::new(spoke.distance * self.scale_or_default(), 0.0, 0.0);
+        let distance = spoke.distance * self.scale_or_default();
+        let pos = rot * Vec3::new(distance, 0.0, 0.0);
         let pos = self.xform.transform_point3(pos);
         (order, pos)
     }
@@ -287,6 +303,42 @@ impl Ring {
     pub(crate) fn make_hub(&self) -> (Degrees, Vec3) {
         let pos = self.xform.transform_point3(Vec3::ZERO);
         (Degrees(0), pos)
+    }
+
+    /// Make ring points
+    pub(crate) fn make_points(&mut self, builder: &mut MeshBuilder) {
+        let mut points = Vec::with_capacity(self.spokes.len());
+        for (i, spoke) in self.spokes().enumerate() {
+            let (order, pos) = self.make_point(i, spoke);
+            match &spoke.label {
+                None => {
+                    let vid = builder.push_vtx(pos);
+                    let point = Point {
+                        order,
+                        pt: Pt::Vertex(vid),
+                    };
+                    points.push(point);
+                }
+                Some(label) => {
+                    let point = Point {
+                        order,
+                        pt: Pt::Branch(label.into(), pos),
+                    };
+                    points.push(point);
+                }
+            }
+        }
+        self.points = points;
+    }
+
+    /// Push point on ring
+    pub(crate) fn push_pt(&mut self, order: Degrees, pt: Pt) {
+        self.points.push(Point { order, pt });
+    }
+
+    /// Get iterator of points on ring
+    pub(crate) fn points(&self) -> impl Iterator<Item = &Point> {
+        self.points.iter()
     }
 }
 
@@ -302,8 +354,7 @@ impl Branch {
     }
 
     /// Calculate branch base axis
-    pub fn axis(&self, builder: &MeshBuilder) -> Vec3 {
-        let center = self.center();
+    pub fn axis(&self, builder: &MeshBuilder, center: Vec3) -> Vec3 {
         let mut norm = Vec3::ZERO;
         for edge in self.edges() {
             let v0 = builder.vertex(edge.0);
@@ -331,7 +382,7 @@ impl Branch {
         edges.into_iter().map(|e| e.0).collect()
     }
 
-    /// Get center of internal vertices
+    /// Get center of internal points
     pub fn center(&self) -> Vec3 {
         let len = self.internal.len() as f32;
         self.internal.iter().fold(Vec3::ZERO, |a, b| a + *b) / len

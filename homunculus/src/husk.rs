@@ -5,33 +5,10 @@
 use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
-use crate::ring::{Branch, Degrees, Ring};
+use crate::ring::{Branch, Degrees, Point, Pt, Ring};
 use glam::Vec3;
 use std::collections::HashMap;
 use std::io::Write;
-
-/// Point type
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-enum Pt {
-    /// Vertex number
-    Vertex(usize),
-
-    /// Branch label
-    Branch(String),
-}
-
-/// A point on a husk
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-struct Point {
-    /// Degrees around ring (must be first for `Ord`)
-    order_deg: Degrees,
-
-    /// Ring ID
-    ring_id: usize,
-
-    /// Point type
-    pt_type: Pt,
-}
 
 /// Shell of a 3D model
 ///
@@ -53,14 +30,8 @@ pub struct Husk {
     /// Mesh builder
     builder: MeshBuilder,
 
-    /// Current ring ID
-    ring_id: usize,
-
     /// Current ring
     ring: Option<Ring>,
-
-    /// All points on mesh
-    points: Vec<Point>,
 
     /// Mapping of labels to branches
     branches: HashMap<String, Branch>,
@@ -77,15 +48,13 @@ impl Husk {
     pub fn new() -> Self {
         Husk {
             builder: Mesh::builder(),
-            ring_id: 0,
             ring: None,
-            points: Vec::new(),
             branches: HashMap::new(),
         }
     }
 
-    /// Add internal branch vertex
-    fn add_branch_vertex(&mut self, label: &str, pos: Vec3) {
+    /// Push internal branch point
+    fn push_branch_internal(&mut self, label: &str, pos: Vec3) {
         if !self.branches.contains_key(label) {
             self.branches.insert(label.to_string(), Branch::default());
         }
@@ -94,29 +63,21 @@ impl Husk {
         }
     }
 
-    /// Push one point
-    fn push_pt(&mut self, order_deg: Degrees, pt_type: Pt) {
-        let ring_id = self.ring_id;
-        self.points.push(Point {
-            order_deg,
-            ring_id,
-            pt_type,
-        });
+    /// Push branch edge
+    fn push_branch_edge(&mut self, label: &str, v0: usize, v1: usize) {
+        if !self.branches.contains_key(label) {
+            self.branches.insert(label.to_string(), Branch::default());
+        }
+        if let Some(branch) = self.branches.get_mut(label) {
+            branch.push_edge(v0, v1);
+        }
     }
 
-    /// Add points for a ring
-    fn add_ring_points(&mut self, ring: &Ring) {
-        for (i, spoke) in ring.spokes().enumerate() {
-            let (order, pos) = ring.make_point(i, spoke);
-            match &spoke.label {
-                None => {
-                    let vid = self.builder.push_vtx(pos);
-                    self.push_pt(order, Pt::Vertex(vid));
-                }
-                Some(label) => {
-                    self.add_branch_vertex(label, pos);
-                    self.push_pt(order, Pt::Branch(label.into()))
-                }
+    /// Add branch points for a ring
+    fn add_branch_points(&mut self, ring: &Ring) {
+        for point in ring.points() {
+            if let Pt::Branch(label, pos) = &point.pt {
+                self.push_branch_internal(label, *pos);
             }
         }
     }
@@ -134,13 +95,12 @@ impl Husk {
             Some(pr) => pr.with_ring(&ring),
             None => ring,
         };
-        ring.id = self.ring_id;
-        self.add_ring_points(&ring);
+        ring.make_points(&mut self.builder);
+        self.add_branch_points(&ring);
         if let Some(pring) = &pring {
             self.make_band(pring, &ring)?;
         }
         self.ring = Some(ring);
-        self.ring_id += 1;
         Ok(())
     }
 
@@ -155,23 +115,22 @@ impl Husk {
     /// Add a cap face on the given ring
     fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
         let mut pts = self.ring_points(&ring, Degrees(0));
-        let last = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
+        let last = pts.pop().unwrap();
         if pts.len() < 2 {
             return Ok(());
         }
         // add hub point
         let (order, pos) = ring.make_hub();
         let vid = self.builder.push_vtx(pos);
-        ring.id = self.ring_id;
-        self.push_pt(order, Pt::Vertex(vid));
-        let hub = self.points.last().unwrap().clone();
+        let hub = Pt::Vertex(vid);
+        ring.push_pt(order, hub.clone());
+        let hub = Point { order, pt: hub };
         let mut prev = last.clone();
         for pt in pts.drain(..) {
             self.add_face([&pt, &prev, &hub], ring.smoothing_or_default())?;
             prev = pt;
         }
         self.add_face([&last, &prev, &hub], ring.smoothing_or_default())?;
-        self.ring_id += 1;
         Ok(())
     }
 
@@ -188,12 +147,10 @@ impl Husk {
         if let Some(axis) = axis {
             ring = ring.axis(axis);
         }
-        ring.id = self.ring_id;
-        for (order_deg, vid) in self.edge_angles(&branch, &ring) {
-            self.push_pt(order_deg, Pt::Vertex(vid));
+        for (order, vid) in self.edge_angles(&branch, &ring) {
+            ring.push_pt(order, Pt::Vertex(vid));
         }
         self.ring = Some(ring);
-        self.ring_id += 1;
         Ok(())
     }
 
@@ -246,38 +203,32 @@ impl Husk {
     /// Get the points for one ring
     fn ring_points(&self, ring: &Ring, hs_other: Degrees) -> Vec<Point> {
         let mut pts = Vec::new();
-        for point in &self.points {
-            if point.ring_id == ring.id {
-                let mut pt = point.clone();
-                // adjust degrees by half step of other ring
-                pt.order_deg = pt.order_deg + hs_other;
-                pts.push(pt);
-            }
+        for point in ring.points() {
+            let mut point = point.clone();
+            // adjust degrees by half step of other ring
+            point.order = point.order + hs_other;
+            pts.push(point);
         }
-        pts.sort();
-        pts.reverse();
+        pts.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
         pts
     }
 
     /// Make a band of faces between two rings
     fn make_band(&mut self, ring0: &Ring, ring1: &Ring) -> Result<()> {
-        if ring0.id == ring1.id {
-            return Err(Error::InvalidRing(ring0.id));
-        }
         // get points for each ring
         let mut pts0 = self.ring_points(ring0, ring1.half_step());
         let mut pts1 = self.ring_points(ring1, ring0.half_step());
-        let first0 = pts0.pop().ok_or(Error::InvalidRing(ring0.id))?;
-        let first1 = pts1.pop().ok_or(Error::InvalidRing(ring1.id))?;
-        pts0.append(&mut pts1);
-        pts0.sort();
-        pts0.reverse();
-        let mut band = pts0;
+        let first0 = pts0.pop().unwrap();
+        let first1 = pts1.pop().unwrap();
+        let mut band = Vec::with_capacity(pts0.len() + pts1.len());
+        band.extend_from_slice(&pts0[..]);
+        band.append(&mut pts1);
+        band.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
             self.add_face([&pt1, &pt0, &pt], ring0.smoothing_or_default())?;
-            if pt.ring_id == ring0.id {
+            if pts0.contains(&pt) {
                 pt0 = pt;
             } else {
                 pt1 = pt;
@@ -302,23 +253,19 @@ impl Husk {
         pts: [&Point; 3],
         smoothing: Smoothing,
     ) -> Result<()> {
-        match (&pts[0].pt_type, &pts[1].pt_type, &pts[2].pt_type) {
+        match (&pts[0].pt, &pts[1].pt, &pts[2].pt) {
             (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Vertex(v2)) => {
                 let face = Face::new([*v0, *v1, *v2], smoothing);
                 self.builder.push_face(face);
             }
-            (Pt::Branch(lbl), Pt::Vertex(v0), Pt::Vertex(v1))
-            | (Pt::Vertex(v1), Pt::Branch(lbl), Pt::Vertex(v0))
-            | (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Branch(lbl)) => {
-                let branch = self
-                    .branches
-                    .get_mut(lbl)
-                    .ok_or_else(|| Error::UnknownBranchLabel(lbl.into()))?;
-                branch.push_edge(*v0, *v1);
+            (Pt::Branch(lbl, _), Pt::Vertex(v0), Pt::Vertex(v1))
+            | (Pt::Vertex(v1), Pt::Branch(lbl, _), Pt::Vertex(v0))
+            | (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Branch(lbl, _)) => {
+                self.push_branch_edge(lbl, *v0, *v1);
             }
-            (Pt::Vertex(_v), Pt::Branch(b0), Pt::Branch(b1))
-            | (Pt::Branch(b0), Pt::Vertex(_v), Pt::Branch(b1))
-            | (Pt::Branch(b0), Pt::Branch(b1), Pt::Vertex(_v)) => {
+            (Pt::Vertex(_v), Pt::Branch(b0, _), Pt::Branch(b1, _))
+            | (Pt::Branch(b0, _), Pt::Vertex(_v), Pt::Branch(b1, _))
+            | (Pt::Branch(b0, _), Pt::Branch(b1, _), Pt::Vertex(_v)) => {
                 // A single vertex and two branch points:
                 // - both points must be for the same branch
                 // - no edges need to be added
@@ -328,7 +275,7 @@ impl Husk {
                     )));
                 }
             }
-            (Pt::Branch(b0), Pt::Branch(b1), Pt::Branch(b2)) => {
+            (Pt::Branch(b0, _), Pt::Branch(b1, _), Pt::Branch(b2, _)) => {
                 // Three adjacent branch points:
                 // - all points must be for the same branch
                 if b0 != b1 {

@@ -10,10 +10,6 @@ pub enum Error {
     #[error("I/O {0}")]
     Io(#[from] std::io::Error),
 
-    /// Invalid Ring
-    #[error("Invalid ring: {0}")]
-    InvalidRing(usize),
-
     /// Invalid Branches
     #[error("Invalid branches: {0}")]
     InvalidBranches(String),
