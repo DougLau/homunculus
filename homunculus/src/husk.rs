@@ -10,7 +10,7 @@ use glam::Vec3;
 use std::collections::HashMap;
 use std::io::Write;
 
-/// Shell of a 3D model
+/// Outer shell of a 3D model
 ///
 /// A husk is a series of [Ring]s, possibly branching.
 ///
@@ -85,10 +85,10 @@ impl Husk {
     /// Add a ring to the current branch
     ///
     /// All unset properties are copied from the previous ring:
-    /// - axis
+    /// - spacing
     /// - scale
     /// - smoothing
-    /// - points
+    /// - spokes
     pub fn ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
         let mut ring = match &pring {
@@ -136,6 +136,10 @@ impl Husk {
     }
 
     /// End the current branch and start the `label` branch
+    ///
+    /// The `label` must match a [Spoke] from an earlier ring.
+    ///
+    /// [spoke]: struct.Spoke.html
     pub fn branch(
         &mut self,
         label: impl AsRef<str>,

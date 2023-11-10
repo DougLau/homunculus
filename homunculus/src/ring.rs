@@ -13,11 +13,17 @@ pub struct Degrees(pub u16);
 
 /// Ring spoke
 ///
-/// A point on a [Ring] with distance from the central axis.  An optional label
-/// can be declared for a [branch] point.
+/// A spoke on a [ring] with distance from the central axis.  An optional
+/// `label` can be declared for a [branch].
 ///
+/// ```rust
+/// # use homunculus::Spoke;
+/// let spoke_a = Spoke::from(1.23);
+/// let spoke_b = Spoke::from("branch");
+/// let spoke_c = Spoke::from((2.5, "branch B"));
+/// ```
 /// [branch]: struct.Husk.html#method.branch
-/// [ring]: struct.Ring.html
+/// [ring]: struct.Ring.html#method.spoke
 #[derive(Clone, Debug)]
 pub struct Spoke {
     /// Distance from axis
@@ -63,17 +69,17 @@ pub struct Ring {
     /// Spacing to next ring
     spacing: Option<f32>,
 
-    /// Local-to-global transform
-    pub(crate) xform: Affine3A,
-
-    /// Spokes from center to ring
-    spokes: Vec<Spoke>,
-
     /// Spoke scale factor
     scale: Option<f32>,
 
     /// Edge smoothing
     smoothing: Option<Smoothing>,
+
+    /// Spokes from center to ring
+    spokes: Vec<Spoke>,
+
+    /// Local-to-global transform
+    pub(crate) xform: Affine3A,
 
     /// Points on ring
     points: Vec<Point>,
@@ -151,9 +157,9 @@ impl Ring {
         let mut ring = Ring {
             spacing: None,
             xform,
-            spokes: vec![Spoke::default(); count],
             scale: None,
             smoothing: None,
+            spokes: vec![Spoke::default(); count],
             points: Vec::new(),
         };
         ring.transform_rotate(axis);
@@ -171,9 +177,9 @@ impl Ring {
         let mut ring = Ring {
             spacing,
             xform: self.xform * ring.xform,
-            spokes,
             scale: ring.scale.or(self.scale),
             smoothing: ring.smoothing.or(self.smoothing),
+            spokes,
             points: Vec::new(),
         };
         ring.transform_translate();
@@ -242,7 +248,7 @@ impl Ring {
     }
 
     /// Get an iterator of spokes
-    pub fn spokes(&self) -> impl Iterator<Item = &Spoke> {
+    pub(crate) fn spokes(&self) -> impl Iterator<Item = &Spoke> {
         if self.spokes.is_empty() {
             EMPTY_RING.iter()
         } else {
