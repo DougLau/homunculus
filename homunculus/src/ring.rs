@@ -11,7 +11,7 @@ use std::ops::Add;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) struct Degrees(pub u16);
 
-/// Ring point
+/// Ring spoke
 ///
 /// A point on a [Ring] with distance from the central axis.  An optional label
 /// can be declared for a [branch] point.
@@ -19,7 +19,7 @@ pub(crate) struct Degrees(pub u16);
 /// [branch]: struct.Husk.html#method.branch
 /// [ring]: struct.Ring.html
 #[derive(Clone, Debug)]
-pub struct RingPoint {
+pub struct Spoke {
     /// Distance from axis
     pub distance: f32,
 
@@ -27,8 +27,8 @@ pub struct RingPoint {
     pub label: Option<String>,
 }
 
-/// Empty ring points
-const EMPTY_RING: &[RingPoint] = &[RingPoint {
+/// Empty ring spokes
+const EMPTY_RING: &[Spoke] = &[Spoke {
     distance: 0.0,
     label: None,
 }];
@@ -43,14 +43,14 @@ pub struct Ring {
     /// Ring ID
     pub(crate) id: usize,
 
-    /// Ring spacing length
+    /// Spacing to next ring
     length: Option<f32>,
 
     /// Global-to-local transform
     pub(crate) xform: Affine3A,
 
-    /// Ring points
-    points: Vec<RingPoint>,
+    /// Ring spokes
+    spokes: Vec<Spoke>,
 
     /// Scale factor
     scale: Option<f32>,
@@ -88,33 +88,33 @@ impl Add for Degrees {
     }
 }
 
-impl Default for RingPoint {
+impl Default for Spoke {
     fn default() -> Self {
-        RingPoint::from(1.0)
+        Spoke::from(1.0)
     }
 }
 
-impl From<f32> for RingPoint {
+impl From<f32> for Spoke {
     fn from(distance: f32) -> Self {
-        RingPoint {
+        Spoke {
             distance,
             label: None,
         }
     }
 }
 
-impl From<&str> for RingPoint {
+impl From<&str> for Spoke {
     fn from(label: &str) -> Self {
-        RingPoint {
+        Spoke {
             distance: 1.0,
             label: Some(label.to_string()),
         }
     }
 }
 
-impl From<(f32, &str)> for RingPoint {
+impl From<(f32, &str)> for Spoke {
     fn from(val: (f32, &str)) -> Self {
-        RingPoint {
+        Spoke {
             distance: val.0,
             label: Some(val.1.to_string()),
         }
@@ -132,7 +132,7 @@ impl Ring {
             id: 0,
             length: None,
             xform,
-            points: vec![RingPoint::default(); count],
+            spokes: vec![Spoke::default(); count],
             scale: None,
             smoothing: None,
         };
@@ -143,16 +143,16 @@ impl Ring {
     /// Create a ring updated with another ring
     pub(crate) fn with_ring(&self, ring: &Self) -> Self {
         let length = ring.length.or(self.length);
-        let points = if ring.points.is_empty() {
-            self.points.clone()
+        let spokes = if ring.spokes.is_empty() {
+            self.spokes.clone()
         } else {
-            ring.points.clone()
+            ring.spokes.clone()
         };
         let mut ring = Ring {
             id: self.id,
             length,
             xform: self.xform * ring.xform,
-            points,
+            spokes,
             scale: ring.scale.or(self.scale),
             smoothing: ring.smoothing.or(self.smoothing),
         };
@@ -194,7 +194,9 @@ impl Ring {
         self.smoothing.unwrap_or(Smoothing::Flat)
     }
 
-    /// Add a ring / [branch] point
+    /// Add a spoke point
+    ///
+    /// A `label` is used for [branch] points.
     ///
     /// ```rust
     /// # use homunculus::Ring;
@@ -211,32 +213,32 @@ impl Ring {
     /// This function will panic if the distance is negative, infinite, or NaN.
     ///
     /// [branch]: struct.Husk.html#method.branch
-    pub fn point<P: Into<RingPoint>>(mut self, pt: P) -> Self {
+    pub fn spoke<P: Into<Spoke>>(mut self, pt: P) -> Self {
         let pt = pt.into();
         assert!(pt.distance.is_finite());
         assert!(pt.distance.is_sign_positive());
-        self.points.push(pt);
+        self.spokes.push(pt);
         self
     }
 
-    /// Get an iterator of ring points
-    pub fn points(&self) -> impl Iterator<Item = &RingPoint> {
-        if self.points.is_empty() {
+    /// Get an iterator of spokes
+    pub fn spokes(&self) -> impl Iterator<Item = &Spoke> {
+        if self.spokes.is_empty() {
             EMPTY_RING.iter()
         } else {
-            self.points[..].iter()
+            self.spokes[..].iter()
         }
     }
 
     /// Get half step in degrees
     pub(crate) fn half_step(&self) -> Degrees {
-        let deg = 180 / self.points.len();
+        let deg = 180 / self.spokes.len();
         Degrees(deg as u16)
     }
 
-    /// Calculate the angle of a point
+    /// Calculate the angle of a spoke
     pub(crate) fn angle(&self, i: usize) -> f32 {
-        2.0 * PI * i as f32 / self.points.len() as f32
+        2.0 * PI * i as f32 / self.spokes.len() as f32
     }
 
     /// Translate a transform from axis

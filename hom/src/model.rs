@@ -64,8 +64,8 @@ impl TryFrom<&RingDef> for Ring {
         }
         for pt in def.point_defs()? {
             ring = match pt {
-                PtDef::Distance(d) => ring.point(d),
-                PtDef::Branch(b) => ring.point(b.as_ref()),
+                PtDef::Distance(d) => ring.spoke(d),
+                PtDef::Branch(b) => ring.spoke(b.as_ref()),
             };
         }
         Ok(ring)

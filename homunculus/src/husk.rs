@@ -106,7 +106,7 @@ impl Husk {
 
     /// Add points for a ring
     fn add_ring_points(&mut self, ring: &Ring) {
-        for (i, rpt) in ring.points().enumerate() {
+        for (i, rpt) in ring.spokes().enumerate() {
             let angle = ring.angle(i);
             let order_deg = Degrees::from(angle);
             let rot = Quat::from_rotation_y(angle);
