@@ -41,9 +41,9 @@ struct Point {
 /// # use homunculus::{Error, Husk, Ring};
 /// # fn main() -> Result<(), Error> {
 /// let mut pyramid = Husk::new();
-/// let base = Ring::default().point(1.0).point(1.0).point(1.0);
+/// let base = Ring::default().spoke(1.0).spoke(1.0).spoke(1.0);
 /// pyramid.ring(base)?;
-/// pyramid.ring(Ring::default().point(0.0))?;
+/// pyramid.ring(Ring::default().spoke(0.0))?;
 /// # Ok(())
 /// # }
 /// ```

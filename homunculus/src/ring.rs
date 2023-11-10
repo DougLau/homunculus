@@ -194,18 +194,18 @@ impl Ring {
         self.smoothing.unwrap_or(Smoothing::Flat)
     }
 
-    /// Add a spoke point
+    /// Add a spoke
     ///
     /// A `label` is used for [branch] points.
     ///
     /// ```rust
     /// # use homunculus::Ring;
     /// let ring = Ring::default()
-    ///     .point(2.0)
-    ///     .point(2.7)
-    ///     .point("branch A")
-    ///     .point((1.6, "branch A"))
-    ///     .point(1.8);
+    ///     .spoke(2.0)
+    ///     .spoke(2.7)
+    ///     .spoke("branch A")
+    ///     .spoke((1.6, "branch A"))
+    ///     .spoke(1.8);
     /// ```
     ///
     /// # Panics
