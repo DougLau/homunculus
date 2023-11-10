@@ -139,6 +139,10 @@ impl Husk {
     ///
     /// The `label` must match a [Spoke] from an earlier ring.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if any axis component is infinite or NaN.
+    ///
     /// [spoke]: struct.Spoke.html
     pub fn branch(
         &mut self,

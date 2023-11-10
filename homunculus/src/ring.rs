@@ -187,13 +187,30 @@ impl Ring {
     }
 
     /// Set ring axis
+    ///
+    /// Spacing between rings is determined by its length.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if any axis component is infinite or NaN.
     pub fn axis(mut self, axis: Vec3) -> Self {
+        assert!(axis.x.is_finite());
+        assert!(axis.y.is_finite());
+        assert!(axis.z.is_finite());
         self.transform_rotate(axis);
         self
     }
 
     /// Set ring scale
+    ///
+    /// Spoke distances are scaled by this factor.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the scale is negative, infinite, or NaN.
     pub fn scale(mut self, scale: f32) -> Self {
+        assert!(scale.is_finite());
+        assert!(scale.is_sign_positive());
         self.scale = Some(scale);
         self
     }
