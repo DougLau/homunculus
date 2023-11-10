@@ -156,21 +156,21 @@ impl Husk {
     fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
         let mut pts = self.ring_points(&ring, Degrees(0));
         let last = pts.pop().ok_or(Error::InvalidRing(ring.id))?;
-        if pts.is_empty() {
+        if pts.len() < 2 {
             return Ok(());
         }
-        // add cap center point
-        let pos = ring.xform.transform_point3(Vec3::ZERO);
+        // add hub point
+        let (order, pos) = ring.make_hub();
         let vid = self.builder.push_vtx(pos);
         ring.id = self.ring_id;
-        self.push_pt(Degrees(0), Pt::Vertex(vid));
-        let center = self.points.last().unwrap().clone();
+        self.push_pt(order, Pt::Vertex(vid));
+        let hub = self.points.last().unwrap().clone();
         let mut prev = last.clone();
         for pt in pts.drain(..) {
-            self.add_face([&pt, &prev, &center], ring.smoothing_or_default())?;
+            self.add_face([&pt, &prev, &hub], ring.smoothing_or_default())?;
             prev = pt;
         }
-        self.add_face([&last, &prev, &center], ring.smoothing_or_default())?;
+        self.add_face([&last, &prev, &hub], ring.smoothing_or_default())?;
         self.ring_id += 1;
         Ok(())
     }

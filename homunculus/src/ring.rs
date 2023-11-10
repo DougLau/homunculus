@@ -282,6 +282,12 @@ impl Ring {
         let pos = self.xform.transform_point3(pos);
         (order, pos)
     }
+
+    /// Make hub point
+    pub(crate) fn make_hub(&self) -> (Degrees, Vec3) {
+        let pos = self.xform.transform_point3(Vec3::ZERO);
+        (Degrees(0), pos)
+    }
 }
 
 impl Branch {
