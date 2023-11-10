@@ -44,7 +44,7 @@ pub struct Ring {
     pub(crate) id: usize,
 
     /// Spacing to next ring
-    length: Option<f32>,
+    spacing: Option<f32>,
 
     /// Global-to-local transform
     pub(crate) xform: Affine3A,
@@ -130,7 +130,7 @@ impl Ring {
         let count = branch.edge_vertex_count();
         let mut ring = Ring {
             id: 0,
-            length: None,
+            spacing: None,
             xform,
             spokes: vec![Spoke::default(); count],
             scale: None,
@@ -142,7 +142,7 @@ impl Ring {
 
     /// Create a ring updated with another ring
     pub(crate) fn with_ring(&self, ring: &Self) -> Self {
-        let length = ring.length.or(self.length);
+        let spacing = ring.spacing.or(self.spacing);
         let spokes = if ring.spokes.is_empty() {
             self.spokes.clone()
         } else {
@@ -150,7 +150,7 @@ impl Ring {
         };
         let mut ring = Ring {
             id: self.id,
-            length,
+            spacing,
             xform: self.xform * ring.xform,
             spokes,
             scale: ring.scale.or(self.scale),
@@ -243,14 +243,14 @@ impl Ring {
 
     /// Translate a transform from axis
     fn transform_translate(&mut self) {
-        let length = self.length.unwrap_or(1.0);
-        let axis = Vec3A::new(0.0, length, 0.0);
+        let spacing = self.spacing.unwrap_or(1.0);
+        let axis = Vec3A::new(0.0, spacing, 0.0);
         self.xform.translation += self.xform.matrix3.mul_vec3a(axis);
     }
 
     /// Rotate a transform from axis
     fn transform_rotate(&mut self, axis: Vec3) {
-        self.length = Some(axis.length());
+        self.spacing = Some(axis.length());
         let axis = axis.normalize();
         if axis.x != 0.0 {
             // project to XY plane, then rotate around Z axis
