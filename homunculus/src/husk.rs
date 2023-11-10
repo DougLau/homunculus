@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
 use crate::ring::{Branch, Degrees, Ring};
-use glam::{Quat, Vec3};
+use glam::Vec3;
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -106,21 +106,16 @@ impl Husk {
 
     /// Add points for a ring
     fn add_ring_points(&mut self, ring: &Ring) {
-        for (i, rpt) in ring.spokes().enumerate() {
-            let angle = ring.angle(i);
-            let order_deg = Degrees::from(angle);
-            let rot = Quat::from_rotation_y(angle);
-            let pos = rot
-                * Vec3::new(rpt.distance * ring.scale_or_default(), 0.0, 0.0);
-            let pos = ring.xform.transform_point3(pos);
-            match &rpt.label {
+        for (i, spoke) in ring.spokes().enumerate() {
+            let (order, pos) = ring.make_point(i, spoke);
+            match &spoke.label {
                 None => {
                     let vid = self.builder.push_vtx(pos);
-                    self.push_pt(order_deg, Pt::Vertex(vid));
+                    self.push_pt(order, Pt::Vertex(vid));
                 }
                 Some(label) => {
                     self.add_branch_vertex(label, pos);
-                    self.push_pt(order_deg, Pt::Branch(label.into()))
+                    self.push_pt(order, Pt::Branch(label.into()))
                 }
             }
         }
@@ -140,11 +135,11 @@ impl Husk {
             None => ring,
         };
         ring.id = self.ring_id;
-        self.ring = Some(ring.clone());
         self.add_ring_points(&ring);
         if let Some(pring) = &pring {
             self.make_band(pring, &ring)?;
         }
+        self.ring = Some(ring);
         self.ring_id += 1;
         Ok(())
     }

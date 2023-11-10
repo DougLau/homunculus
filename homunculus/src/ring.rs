@@ -3,7 +3,7 @@
 // Copyright (c) 2022-2023  Douglas Lau
 //
 use crate::mesh::{MeshBuilder, Smoothing};
-use glam::{Affine3A, Mat3A, Vec2, Vec3, Vec3A};
+use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
 use std::f32::consts::PI;
 use std::ops::Add;
 
@@ -185,7 +185,7 @@ impl Ring {
     }
 
     /// Get the ring scale (or default value)
-    pub(crate) fn scale_or_default(&self) -> f32 {
+    fn scale_or_default(&self) -> f32 {
         self.scale.unwrap_or(1.0)
     }
 
@@ -213,11 +213,11 @@ impl Ring {
     /// This function will panic if the distance is negative, infinite, or NaN.
     ///
     /// [branch]: struct.Husk.html#method.branch
-    pub fn spoke<P: Into<Spoke>>(mut self, pt: P) -> Self {
-        let pt = pt.into();
-        assert!(pt.distance.is_finite());
-        assert!(pt.distance.is_sign_positive());
-        self.spokes.push(pt);
+    pub fn spoke<S: Into<Spoke>>(mut self, spoke: S) -> Self {
+        let spoke = spoke.into();
+        assert!(spoke.distance.is_finite());
+        assert!(spoke.distance.is_sign_positive());
+        self.spokes.push(spoke);
         self
     }
 
@@ -266,6 +266,21 @@ impl Ring {
             let angle = up.angle_between(proj) * proj.length();
             self.xform.matrix3 *= Mat3A::from_rotation_x(angle);
         }
+    }
+
+    /// Make a point for the given spoke
+    pub(crate) fn make_point(
+        &self,
+        i: usize,
+        spoke: &Spoke,
+    ) -> (Degrees, Vec3) {
+        let angle = self.angle(i);
+        let order = Degrees::from(angle);
+        let rot = Quat::from_rotation_y(angle);
+        let pos =
+            rot * Vec3::new(spoke.distance * self.scale_or_default(), 0.0, 0.0);
+        let pos = self.xform.transform_point3(pos);
+        (order, pos)
     }
 }
 
