@@ -72,7 +72,7 @@ pub struct Ring {
     /// Spoke scale factor
     scale: Option<f32>,
 
-    /// Edge smoothing
+    /// Vertex normal smoothing
     smoothing: Option<f32>,
 
     /// Spokes from center to ring
@@ -406,7 +406,7 @@ impl Branch {
     }
 
     /// Get edge vertices sorted by common end-points
-    fn edge_vids(self, edge: usize) -> Vec<usize> {
+    fn edge_vids(self, edge: usize) -> impl ExactSizeIterator<Item = usize> {
         let mut edges = self.edges;
         if edge > 0 {
             edges.swap(0, edge);
@@ -420,7 +420,7 @@ impl Branch {
             }
             vid = edges[i].1;
         }
-        edges.into_iter().map(|e| e.0).collect()
+        edges.into_iter().map(|e| e.0)
     }
 
     /// Get center of internal points
