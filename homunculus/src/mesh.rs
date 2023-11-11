@@ -17,11 +17,10 @@ impl From<usize> for Vertex {
 
 /// Triangle face
 ///
-/// Vertices and edges:
 /// ```text
 /// v0______v2
-///   \ e2 /
-/// e0 \  / e1
+///   \    /
+///    \  /
 ///     \/
 ///     v1
 /// ```
@@ -29,7 +28,8 @@ impl From<usize> for Vertex {
 pub struct Face {
     /// Vertex positions
     vtx: [usize; 3],
-    /// Vertex smoothing
+
+    /// Vertex normal smoothing factors
     smoothing: [f32; 3],
 }
 
@@ -38,6 +38,7 @@ pub struct Face {
 pub struct MeshBuilder {
     /// Vertex positions
     pos: Vec<Vec3>,
+
     /// Triangle faces
     faces: Vec<Face>,
 }
@@ -46,19 +47,20 @@ pub struct MeshBuilder {
 pub struct Mesh {
     /// Vertex positions
     pos: Vec<Vec3>,
+
     /// Vertex normals
     norm: Vec<Vec3>,
+
     /// Vertex indices
     indices: Vec<Vertex>,
 }
 
 impl Face {
     /// Create a new face
-    pub fn new(vtx: [usize; 3], smoothing: f32) -> Self {
+    pub fn new(vtx: [usize; 3], smoothing: [f32; 3]) -> Self {
         debug_assert_ne!(vtx[0], vtx[1]);
         debug_assert_ne!(vtx[1], vtx[2]);
         debug_assert_ne!(vtx[2], vtx[0]);
-        let smoothing = [smoothing; 3];
         Self { vtx, smoothing }
     }
 

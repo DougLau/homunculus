@@ -215,7 +215,7 @@ impl Ring {
         self
     }
 
-    /// Set edge smoothing
+    /// Set normal smoothing factor
     ///
     /// Ranges from `0.0` (flat) to `1.0` (smooth)
     ///
@@ -234,7 +234,7 @@ impl Ring {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Get the edge smoothing (or default value)
+    /// Get the normal smoothing factor (or default value)
     pub(crate) fn smoothing_or_default(&self) -> f32 {
         self.smoothing.unwrap_or(0.0)
     }

@@ -125,13 +125,14 @@ impl Husk {
         let vid = self.builder.push_vtx(pos);
         let hub = Pt::Vertex(vid);
         ring.push_pt(order, hub.clone());
+        let sm = ring.smoothing_or_default();
         let hub = Point { order, pt: hub };
         let mut prev = last.clone();
         for pt in pts.drain(..) {
-            self.add_face([&pt, &prev, &hub], ring.smoothing_or_default())?;
+            self.add_face([&pt, &prev, &hub], [sm, sm, sm])?;
             prev = pt;
         }
-        self.add_face([&last, &prev, &hub], ring.smoothing_or_default())?;
+        self.add_face([&last, &prev, &hub], [sm, sm, sm])?;
         Ok(())
     }
 
@@ -235,9 +236,12 @@ impl Husk {
         band.append(&mut pts1);
         band.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
         let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
+        let sm0 = ring0.smoothing_or_default();
+        let sm1 = ring1.smoothing_or_default();
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            self.add_face([&pt1, &pt0, &pt], ring0.smoothing_or_default())?;
+            let sm = if pts0.contains(&pt) { sm0 } else { sm1 };
+            self.add_face([&pt1, &pt0, &pt], [sm1, sm0, sm])?;
             if pts0.contains(&pt) {
                 pt0 = pt;
             } else {
@@ -246,19 +250,20 @@ impl Husk {
         }
         // connect with first vertices on band
         if pt1 != first1 {
-            self.add_face([&pt1, &pt0, &first1], ring0.smoothing_or_default())?;
+            self.add_face([&pt1, &pt0, &first1], [sm1, sm0, sm1])?;
         }
         if pt0 != first0 {
-            self.add_face(
-                [&first0, &first1, &pt0],
-                ring0.smoothing_or_default(),
-            )?;
+            self.add_face([&first0, &first1, &pt0], [sm0, sm1, sm0])?;
         }
         Ok(())
     }
 
     /// Add a triangle face
-    fn add_face(&mut self, pts: [&Point; 3], smoothing: f32) -> Result<()> {
+    fn add_face(
+        &mut self,
+        pts: [&Point; 3],
+        smoothing: [f32; 3],
+    ) -> Result<()> {
         match (&pts[0].pt, &pts[1].pt, &pts[2].pt) {
             (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Vertex(v2)) => {
                 let face = Face::new([*v0, *v1, *v2], smoothing);
