@@ -64,11 +64,16 @@ impl Face {
         Self { vtx, smoothing }
     }
 
-    /// Check if a vertex is flat
-    fn is_flat_vertex(&self, idx: usize) -> bool {
-        (self.vtx[0] == idx && self.smoothing[0] == 0.0)
-            || (self.vtx[1] == idx && self.smoothing[1] == 0.0)
-            || (self.vtx[2] == idx && self.smoothing[2] == 0.0)
+    /// Check if face contains a vertex
+    fn contains(&self, idx: usize) -> bool {
+        self.vtx.contains(&idx)
+    }
+
+    /// Check if a vertex is smooth
+    fn is_vertex_smooth(&self, idx: usize) -> bool {
+        (self.vtx[0] == idx && self.smoothing[0] == 1.0)
+            || (self.vtx[1] == idx && self.smoothing[1] == 1.0)
+            || (self.vtx[2] == idx && self.smoothing[2] == 1.0)
     }
 }
 
@@ -103,11 +108,11 @@ impl MeshBuilder {
 
     /// Build the mesh
     pub fn build(self) -> Mesh {
-        Mesh::new(self.split_edge_seams())
+        Mesh::new(self.split_vertices())
     }
 
-    /// Split vertices at edge seams
-    fn split_edge_seams(mut self) -> Self {
+    /// Split all non-smooth vertices
+    fn split_vertices(mut self) -> Self {
         let vertices = self.pos.len();
         for idx in 0..vertices {
             while self.vertex_needs_split(idx) {
@@ -121,7 +126,7 @@ impl MeshBuilder {
     fn vertex_needs_split(&self, idx: usize) -> bool {
         let mut found = false;
         for face in &self.faces {
-            if face.is_flat_vertex(idx) {
+            if face.contains(idx) && !face.is_vertex_smooth(idx) {
                 if found {
                     return true;
                 }
@@ -136,7 +141,7 @@ impl MeshBuilder {
         let pos = self.pos[idx];
         let i = self.push_vtx(pos);
         for face in &mut self.faces {
-            if face.is_flat_vertex(idx) {
+            if face.contains(idx) && !face.is_vertex_smooth(idx) {
                 if face.vtx[0] == idx {
                     face.vtx[0] = i;
                 } else if face.vtx[1] == idx {
@@ -203,7 +208,7 @@ impl Mesh {
         &self.norm[..]
     }
 
-    /// Get slice of vertex indices for all triangles
+    /// Get slice of vertex/normal indices for all triangles
     pub fn indices(&self) -> &[Vertex] {
         &self.indices[..]
     }
