@@ -15,15 +15,6 @@ impl From<usize> for Vertex {
     }
 }
 
-/// Face edge smoothng
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Smoothing {
-    /// Flat edges
-    Flat,
-    /// Smooth edges
-    Smooth,
-}
-
 /// Triangle face
 ///
 /// Vertices and edges:
@@ -38,8 +29,8 @@ pub enum Smoothing {
 pub struct Face {
     /// Vertex positions
     vtx: [usize; 3],
-    /// Edge smoothing
-    edge: [Smoothing; 3],
+    /// Vertex smoothing
+    smoothing: [f32; 3],
 }
 
 /// Mesh builder
@@ -63,25 +54,19 @@ pub struct Mesh {
 
 impl Face {
     /// Create a new face
-    pub fn new(vtx: [usize; 3], smoothing: Smoothing) -> Self {
+    pub fn new(vtx: [usize; 3], smoothing: f32) -> Self {
         debug_assert_ne!(vtx[0], vtx[1]);
         debug_assert_ne!(vtx[1], vtx[2]);
         debug_assert_ne!(vtx[2], vtx[0]);
-        let edge = [smoothing; 3];
-        Self { vtx, edge }
+        let smoothing = [smoothing; 3];
+        Self { vtx, smoothing }
     }
 
-    /// Check if a vertex is next to a flat edge
+    /// Check if a vertex is flat
     fn is_flat_vertex(&self, idx: usize) -> bool {
-        (self.vtx[0] == idx
-            && (self.edge[0] == Smoothing::Flat
-                || self.edge[2] == Smoothing::Flat))
-            || (self.vtx[1] == idx
-                && (self.edge[1] == Smoothing::Flat
-                    || self.edge[0] == Smoothing::Flat))
-            || (self.vtx[2] == idx
-                && (self.edge[2] == Smoothing::Flat
-                    || self.edge[1] == Smoothing::Flat))
+        (self.vtx[0] == idx && self.smoothing[0] == 0.0)
+            || (self.vtx[1] == idx && self.smoothing[1] == 0.0)
+            || (self.vtx[2] == idx && self.smoothing[2] == 0.0)
     }
 }
 

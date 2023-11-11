@@ -36,7 +36,7 @@ pub struct RingDef {
     scale: Option<f32>,
 
     /// Smoothing setting
-    smoothing: Option<String>,
+    smoothing: Option<f32>,
 }
 
 /// Definition of a 3D model
@@ -57,10 +57,8 @@ impl TryFrom<&RingDef> for Ring {
         if let Some(scale) = def.scale {
             ring = ring.scale(scale);
         }
-        match def.smooth()? {
-            Some(true) => ring = ring.smooth(),
-            Some(false) => ring = ring.flat(),
-            None => (),
+        if let Some(smoothing) = def.smoothing {
+            ring = ring.smoothing(smoothing);
         }
         for pt in def.point_defs()? {
             ring = match pt {
@@ -136,16 +134,6 @@ impl RingDef {
             defs.push(def);
         }
         Ok(defs)
-    }
-
-    /// Get edge smoothing
-    fn smooth(&self) -> Result<Option<bool>> {
-        match self.smoothing.as_deref() {
-            Some("Flat") => Ok(Some(false)),
-            Some("Smooth") => Ok(Some(true)),
-            Some(s) => bail!("Invalid smoothing: {s}"),
-            None => Ok(None),
-        }
     }
 }
 

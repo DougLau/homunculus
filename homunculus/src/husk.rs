@@ -4,7 +4,7 @@
 //
 use crate::error::{Error, Result};
 use crate::gltf;
-use crate::mesh::{Face, Mesh, MeshBuilder, Smoothing};
+use crate::mesh::{Face, Mesh, MeshBuilder};
 use crate::ring::{Branch, Degrees, Point, Pt, Ring};
 use glam::Vec3;
 use std::collections::HashMap;
@@ -258,11 +258,7 @@ impl Husk {
     }
 
     /// Add a triangle face
-    fn add_face(
-        &mut self,
-        pts: [&Point; 3],
-        smoothing: Smoothing,
-    ) -> Result<()> {
+    fn add_face(&mut self, pts: [&Point; 3], smoothing: f32) -> Result<()> {
         match (&pts[0].pt, &pts[1].pt, &pts[2].pt) {
             (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Vertex(v2)) => {
                 let face = Face::new([*v0, *v1, *v2], smoothing);

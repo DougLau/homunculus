@@ -2,7 +2,7 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
-use crate::mesh::{MeshBuilder, Smoothing};
+use crate::mesh::MeshBuilder;
 use glam::{Affine3A, Mat3A, Quat, Vec2, Vec3, Vec3A};
 use std::f32::consts::PI;
 use std::ops::Add;
@@ -73,7 +73,7 @@ pub struct Ring {
     scale: Option<f32>,
 
     /// Edge smoothing
-    smoothing: Option<Smoothing>,
+    smoothing: Option<f32>,
 
     /// Spokes from center to ring
     spokes: Vec<Spoke>,
@@ -215,15 +215,17 @@ impl Ring {
         self
     }
 
-    /// Set smooth edges
-    pub fn smooth(mut self) -> Self {
-        self.smoothing = Some(Smoothing::Smooth);
-        self
-    }
-
-    /// Set flat edges
-    pub fn flat(mut self) -> Self {
-        self.smoothing = Some(Smoothing::Flat);
+    /// Set edge smoothing
+    ///
+    /// Ranges from `0.0` (flat) to `1.0` (smooth)
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if smoothing is negative, infinite, or NaN.
+    pub fn smoothing(mut self, smoothing: f32) -> Self {
+        assert!(smoothing.is_finite());
+        assert!(smoothing.is_sign_positive());
+        self.smoothing = Some(smoothing.min(1.0));
         self
     }
 
@@ -233,8 +235,8 @@ impl Ring {
     }
 
     /// Get the edge smoothing (or default value)
-    pub(crate) fn smoothing_or_default(&self) -> Smoothing {
-        self.smoothing.unwrap_or(Smoothing::Flat)
+    pub(crate) fn smoothing_or_default(&self) -> f32 {
+        self.smoothing.unwrap_or(0.0)
     }
 
     /// Add a spoke
