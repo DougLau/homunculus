@@ -153,7 +153,7 @@ impl Husk {
         self.cap()?;
         let label = label.as_ref();
         let branch = self.take_branch(label)?;
-        let mut ring = Ring::with_branch(&branch, &self.builder);
+        let mut ring = Ring::with_branch(branch, &self.builder);
         if let Some(axis) = axis {
             ring = ring.axis(axis);
         }

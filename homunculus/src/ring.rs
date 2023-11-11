@@ -148,12 +148,12 @@ impl From<(f32, &str)> for Spoke {
 }
 
 impl Ring {
-    /// Create a new branch ring
-    pub(crate) fn with_branch(branch: &Branch, builder: &MeshBuilder) -> Self {
+    /// Create a new ring from a branch
+    pub(crate) fn with_branch(branch: Branch, builder: &MeshBuilder) -> Self {
         let center = branch.center();
         let axis = branch.axis(builder, center);
         let xform = Affine3A::from_translation(center);
-        let count = branch.edge_vertex_count();
+        let count = branch.edges.len();
         let mut ring = Ring {
             spacing: None,
             xform,
@@ -395,7 +395,7 @@ impl Branch {
     }
 
     /// Calculate branch base axis
-    pub fn axis(&self, builder: &MeshBuilder, center: Vec3) -> Vec3 {
+    fn axis(&self, builder: &MeshBuilder, center: Vec3) -> Vec3 {
         let mut norm = Vec3::ZERO;
         for edge in self.edges() {
             let v0 = builder.vertex(edge.0);
@@ -406,8 +406,8 @@ impl Branch {
     }
 
     /// Get edge vertices sorted by common end-points
-    fn edge_vids(&self, edge: usize) -> Vec<usize> {
-        let mut edges = self.edges.to_vec();
+    fn edge_vids(self, edge: usize) -> Vec<usize> {
+        let mut edges = self.edges;
         if edge > 0 {
             edges.swap(0, edge);
         }
@@ -424,7 +424,7 @@ impl Branch {
     }
 
     /// Get center of internal points
-    pub fn center(&self) -> Vec3 {
+    fn center(&self) -> Vec3 {
         let len = self.internal.len() as f32;
         self.internal.iter().fold(Vec3::ZERO, |a, b| a + *b) / len
     }
@@ -434,21 +434,9 @@ impl Branch {
         self.edges.iter()
     }
 
-    /// Get count of vertices on edges
-    fn edge_vertex_count(&self) -> usize {
-        let mut vertices = self
-            .edges
-            .iter()
-            .flat_map(|e| [e.0, e.1].into_iter())
-            .collect::<Vec<usize>>();
-        vertices.sort();
-        vertices.dedup();
-        vertices.len()
-    }
-
     /// Calculate edge angles for a branch base
     fn edge_angles(
-        &self,
+        self,
         ring: &Ring,
         builder: &MeshBuilder,
     ) -> Vec<(Degrees, usize)> {
