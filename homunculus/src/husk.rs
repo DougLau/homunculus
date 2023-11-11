@@ -114,7 +114,7 @@ impl Husk {
 
     /// Add a cap face on the given ring
     fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
-        let mut pts = self.ring_points(&ring, Degrees(0));
+        let mut pts = ring.points_offset(Degrees(0));
         // unwrap note: ring will always have at least one point
         let last = pts.pop().unwrap();
         if pts.len() < 2 {
@@ -168,24 +168,11 @@ impl Husk {
             .ok_or_else(|| Error::UnknownBranchLabel(label.into()))
     }
 
-    /// Get the points for one ring in descending order
-    fn ring_points(&self, ring: &Ring, hs_other: Degrees) -> Vec<Point> {
-        let mut pts = Vec::new();
-        for point in ring.points() {
-            let mut point = point.clone();
-            // adjust degrees by half step of other ring
-            point.order = point.order + hs_other;
-            pts.push(point);
-        }
-        pts.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
-        pts
-    }
-
     /// Make a band of faces between two rings
     fn make_band(&mut self, ring0: &Ring, ring1: &Ring) -> Result<()> {
         // get points for each ring
-        let mut pts0 = self.ring_points(ring0, ring1.half_step());
-        let mut pts1 = self.ring_points(ring1, ring0.half_step());
+        let mut pts0 = ring0.points_offset(ring1.half_step());
+        let mut pts1 = ring1.points_offset(ring0.half_step());
         // unwrap note: ring will always have at least one point
         let first0 = pts0.pop().unwrap();
         let first1 = pts1.pop().unwrap();

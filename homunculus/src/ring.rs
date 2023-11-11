@@ -368,6 +368,19 @@ impl Ring {
     pub(crate) fn points(&self) -> impl Iterator<Item = &Point> {
         self.points.iter()
     }
+
+    /// Get points offset by a fixed angle (in descending order)
+    pub(crate) fn points_offset(&self, hs_other: Degrees) -> Vec<Point> {
+        let mut pts = Vec::new();
+        for point in self.points() {
+            let mut point = point.clone();
+            // adjust degrees by half step of other ring
+            point.order = point.order + hs_other;
+            pts.push(point);
+        }
+        pts.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
+        pts
+    }
 }
 
 impl Branch {
