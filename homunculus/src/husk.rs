@@ -113,7 +113,7 @@ impl Husk {
     }
 
     /// Add a cap face on the given ring
-    fn cap_ring(&mut self, mut ring: Ring) -> Result<()> {
+    fn cap_ring(&mut self, ring: Ring) -> Result<()> {
         let mut pts = ring.points_offset(Degrees(0));
         // unwrap note: ring will always have at least one point
         let last = pts.pop().unwrap();
@@ -124,7 +124,6 @@ impl Husk {
         let (order, pos) = ring.make_hub();
         let vid = self.builder.push_vtx(pos);
         let hub = Pt::Vertex(vid);
-        ring.push_pt(order, hub.clone());
         let sm = ring.smoothing_or_default();
         let hub = Point { order, pt: hub };
         let mut prev = last.clone();
