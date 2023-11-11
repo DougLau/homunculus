@@ -157,9 +157,6 @@ impl Husk {
         if let Some(axis) = axis {
             ring = ring.axis(axis);
         }
-        for (order, vid) in self.edge_angles(&branch, &ring) {
-            ring.push_pt(order, Pt::Vertex(vid));
-        }
         self.ring = Some(ring);
         Ok(())
     }
@@ -169,45 +166,6 @@ impl Husk {
         self.branches
             .remove(label)
             .ok_or_else(|| Error::UnknownBranchLabel(label.into()))
-    }
-
-    /// Calculate edge angles for a branch base
-    fn edge_angles(
-        &self,
-        branch: &Branch,
-        ring: &Ring,
-    ) -> Vec<(Degrees, usize)> {
-        let inverse = ring.xform.inverse();
-        let zero_deg = Vec3::new(1.0, 0.0, 0.0);
-        // Step 1: find "first" edge vertex (closest to 0 degrees)
-        let mut edge = 0;
-        let mut angle = f32::MAX;
-        for (i, ed) in branch.edges().enumerate() {
-            let vid = ed.0;
-            let pos = inverse.transform_point3(self.builder.vertex(vid));
-            let pos = Vec3::new(pos.x, 0.0, pos.z);
-            let ang = zero_deg.angle_between(pos);
-            if ang < angle {
-                angle = ang;
-                edge = i;
-            }
-        }
-        // Step 2: sort edge vertices by common end-points
-        let vids = branch.edge_vids(edge);
-        // Step 3: make vec of (order_deg, vid)
-        let mut angle = 0.0;
-        let mut ppos = zero_deg;
-        let mut angles = Vec::with_capacity(vids.len());
-        for vid in vids {
-            let pos = inverse.transform_point3(self.builder.vertex(vid));
-            let pos = Vec3::new(pos.x, 0.0, pos.z);
-            let ang = ppos.angle_between(pos);
-            angle += ang;
-            let order_deg = Degrees::from(angle);
-            angles.push((order_deg, vid));
-            ppos = pos;
-        }
-        angles
     }
 
     /// Get the points for one ring in descending order

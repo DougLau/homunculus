@@ -79,7 +79,7 @@ pub struct Ring {
     spokes: Vec<Spoke>,
 
     /// Local-to-global transform
-    pub(crate) xform: Affine3A,
+    xform: Affine3A,
 
     /// Points on ring
     points: Vec<Point>,
@@ -163,6 +163,9 @@ impl Ring {
             points: Vec::new(),
         };
         ring.transform_rotate(axis);
+        for (order, vid) in branch.edge_angles(&ring, builder) {
+            ring.push_pt(order, Pt::Vertex(vid));
+        }
         ring
     }
 
@@ -390,7 +393,7 @@ impl Branch {
     }
 
     /// Get edge vertices sorted by common end-points
-    pub fn edge_vids(&self, edge: usize) -> Vec<usize> {
+    fn edge_vids(&self, edge: usize) -> Vec<usize> {
         let mut edges = self.edges.to_vec();
         if edge > 0 {
             edges.swap(0, edge);
@@ -414,7 +417,7 @@ impl Branch {
     }
 
     /// Get an iterator of branch edges
-    pub fn edges(&self) -> impl Iterator<Item = &Edge> {
+    fn edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.iter()
     }
 
@@ -428,5 +431,44 @@ impl Branch {
         vertices.sort();
         vertices.dedup();
         vertices.len()
+    }
+
+    /// Calculate edge angles for a branch base
+    fn edge_angles(
+        &self,
+        ring: &Ring,
+        builder: &MeshBuilder,
+    ) -> Vec<(Degrees, usize)> {
+        let inverse = ring.xform.inverse();
+        let zero_deg = Vec3::new(1.0, 0.0, 0.0);
+        // Step 1: find "first" edge vertex (closest to 0 degrees)
+        let mut edge = 0;
+        let mut angle = f32::MAX;
+        for (i, ed) in self.edges().enumerate() {
+            let vid = ed.0;
+            let pos = inverse.transform_point3(builder.vertex(vid));
+            let pos = Vec3::new(pos.x, 0.0, pos.z);
+            let ang = zero_deg.angle_between(pos);
+            if ang < angle {
+                angle = ang;
+                edge = i;
+            }
+        }
+        // Step 2: sort edge vertices by common end-points
+        let vids = self.edge_vids(edge);
+        // Step 3: make vec of (order, vid)
+        let mut angle = 0.0;
+        let mut ppos = zero_deg;
+        let mut angles = Vec::with_capacity(vids.len());
+        for vid in vids {
+            let pos = inverse.transform_point3(builder.vertex(vid));
+            let pos = Vec3::new(pos.x, 0.0, pos.z);
+            let ang = ppos.angle_between(pos);
+            angle += ang;
+            let order = Degrees::from(angle);
+            angles.push((order, vid));
+            ppos = pos;
+        }
+        angles
     }
 }
