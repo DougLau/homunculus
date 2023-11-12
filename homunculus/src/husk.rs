@@ -152,7 +152,7 @@ impl Husk {
     fn take_branch(&mut self, label: &str) -> Result<Branch> {
         self.branches
             .remove(label)
-            .ok_or_else(|| Error::UnknownBranchLabel(label.into()))
+            .ok_or_else(|| Error::UnknownBranchLabel(label.to_string()))
     }
 
     /// Make a band of faces between two rings

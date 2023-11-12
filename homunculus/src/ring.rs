@@ -354,7 +354,7 @@ impl Ring {
                 Some(label) => {
                     let point = Point {
                         order,
-                        pt: Pt::Branch(label.into(), pos),
+                        pt: Pt::Branch(label.to_string(), pos),
                     };
                     points.push(point);
                 }
