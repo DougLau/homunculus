@@ -144,7 +144,11 @@ impl TryFrom<&ModelDef> for Husk {
         let mut husk = Husk::new();
         for ring in &def.ring {
             if let Some(label) = &ring.branch {
-                husk.branch(label, ring.axis()?)?;
+                let mut r = husk.branch(label)?;
+                if let Some(axis) = ring.axis()? {
+                    r = r.axis(axis);
+                }
+                husk.ring(r)?;
             }
             husk.ring(ring.try_into()?)?;
         }

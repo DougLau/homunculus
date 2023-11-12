@@ -95,8 +95,10 @@ impl Husk {
             Some(pr) => pr.with_ring(&ring),
             None => ring,
         };
-        ring.make_points(&mut self.builder);
-        self.add_branch_points(&ring);
+        if ring.points().len() == 0 {
+            ring.make_points(&mut self.builder);
+            self.add_branch_points(&ring);
+        }
         if let Some(pring) = &pring {
             self.make_band(pring, &ring)?;
         }
@@ -135,29 +137,15 @@ impl Husk {
         Ok(())
     }
 
-    /// End the current branch and start the `label` branch
+    /// End the current branch and get the `label` branch
     ///
-    /// The `label` must match a [Spoke] from an earlier ring.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if any axis component is infinite or NaN.
+    /// The `label` must match one or more [Spoke]s from earlier rings.
     ///
     /// [spoke]: struct.Spoke.html
-    pub fn branch(
-        &mut self,
-        label: impl AsRef<str>,
-        axis: Option<Vec3>,
-    ) -> Result<()> {
+    pub fn branch(&mut self, label: impl AsRef<str>) -> Result<Ring> {
         self.cap()?;
-        let label = label.as_ref();
-        let branch = self.take_branch(label)?;
-        let mut ring = Ring::with_branch(branch, &self.builder);
-        if let Some(axis) = axis {
-            ring = ring.axis(axis);
-        }
-        self.ring = Some(ring);
-        Ok(())
+        let branch = self.take_branch(label.as_ref())?;
+        Ok(Ring::with_branch(branch, &self.builder))
     }
 
     /// Take a branch by label
@@ -251,12 +239,15 @@ impl Husk {
     /// Write husk as [glTF] `.glb`
     ///
     /// ```rust,no_run
-    /// # use homunculus::Husk;
+    /// # use homunculus::{Error, Husk};
     /// # use std::fs::File;
+    /// # fn main() -> Result<(), Error> {
     /// let mut husk = Husk::new();
     /// // add rings …
-    /// let file = File::create("husk.glb").unwrap();
-    /// husk.write_gltf(file).unwrap();
+    /// let file = File::create("husk.glb")?;
+    /// husk.write_gltf(file)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// [gltf]: https://en.wikipedia.org/wiki/GlTF

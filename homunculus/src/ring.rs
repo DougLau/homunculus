@@ -195,7 +195,7 @@ impl Ring {
     ///
     /// # Panics
     ///
-    /// This function will panic if any axis component is infinite or NaN.
+    /// - If any axis component is infinite or NaN
     pub fn axis(mut self, axis: Vec3) -> Self {
         assert!(axis.x.is_finite());
         assert!(axis.y.is_finite());
@@ -210,8 +210,10 @@ impl Ring {
     ///
     /// # Panics
     ///
-    /// This function will panic if the scale is negative, infinite, or NaN.
+    /// - If this is a branch ring
+    /// - If the scale is negative, infinite, or NaN
     pub fn scale(mut self, scale: f32) -> Self {
+        assert!(self.points.is_empty(), "cannot scale a branch ring");
         assert!(scale.is_finite());
         assert!(scale.is_sign_positive());
         self.scale = Some(scale);
@@ -224,7 +226,7 @@ impl Ring {
     ///
     /// # Panics
     ///
-    /// This function will panic if smoothing is negative, infinite, or NaN.
+    /// - If smoothing is negative, infinite, or NaN
     pub fn smoothing(mut self, smoothing: f32) -> Self {
         assert!(smoothing.is_finite());
         assert!(smoothing.is_sign_positive());
@@ -258,13 +260,15 @@ impl Ring {
     ///
     /// # Panics
     ///
-    /// This function will panic if the distance is negative, infinite, or NaN.
+    /// - If this is a branch ring
+    /// - If spoke distance is negative, infinite, or NaN
     ///
     /// [branch]: struct.Husk.html#method.branch
     pub fn spoke<S: Into<Spoke>>(mut self, spoke: S) -> Self {
+        assert!(self.points.is_empty(), "cannot add spoke to a branch ring");
         let spoke = spoke.into();
-        assert!(spoke.distance.is_finite());
         assert!(spoke.distance.is_sign_positive());
+        assert!(spoke.distance.is_finite());
         self.spokes.push(spoke);
         self
     }
@@ -365,7 +369,7 @@ impl Ring {
     }
 
     /// Get iterator of points on ring
-    pub(crate) fn points(&self) -> impl Iterator<Item = &Point> {
+    pub(crate) fn points(&self) -> impl ExactSizeIterator<Item = &Point> {
         self.points.iter()
     }
 
