@@ -8,6 +8,7 @@ ring:
   points: 1 * 6
 ring:
   branch: a
+ring:
   axis: 0 0.1 0
 ring:
   axis: 0 1 0

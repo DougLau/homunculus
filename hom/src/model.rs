@@ -50,23 +50,7 @@ impl TryFrom<&RingDef> for Ring {
     type Error = Error;
 
     fn try_from(def: &RingDef) -> Result<Self> {
-        let mut ring = Ring::default();
-        if let Some(axis) = def.axis()? {
-            ring = ring.axis(axis);
-        }
-        if let Some(scale) = def.scale {
-            ring = ring.scale(scale);
-        }
-        if let Some(smoothing) = def.smoothing {
-            ring = ring.smoothing(smoothing);
-        }
-        for pt in def.point_defs()? {
-            ring = match pt {
-                PtDef::Distance(d) => ring.spoke(d),
-                PtDef::Branch(b) => ring.spoke(b.as_ref()),
-            };
-        }
-        Ok(ring)
+        def.build(Ring::default())
     }
 }
 
@@ -135,6 +119,26 @@ impl RingDef {
         }
         Ok(defs)
     }
+
+    /// Build ring from definition
+    fn build(&self, mut ring: Ring) -> Result<Ring> {
+        if let Some(axis) = self.axis()? {
+            ring = ring.axis(axis);
+        }
+        if let Some(scale) = self.scale {
+            ring = ring.scale(scale);
+        }
+        if let Some(smoothing) = self.smoothing {
+            ring = ring.smoothing(smoothing);
+        }
+        for pt in self.point_defs()? {
+            ring = match pt {
+                PtDef::Distance(d) => ring.spoke(d),
+                PtDef::Branch(b) => ring.spoke(b.as_ref()),
+            };
+        }
+        Ok(ring)
+    }
 }
 
 impl TryFrom<&ModelDef> for Husk {
@@ -142,15 +146,12 @@ impl TryFrom<&ModelDef> for Husk {
 
     fn try_from(def: &ModelDef) -> Result<Self> {
         let mut husk = Husk::new();
-        for ring in &def.ring {
-            if let Some(label) = &ring.branch {
-                let mut r = husk.branch(label)?;
-                if let Some(axis) = ring.axis()? {
-                    r = r.axis(axis);
-                }
-                husk.ring(r)?;
-            }
-            husk.ring(ring.try_into()?)?;
+        for ring_def in &def.ring {
+            let ring = match &ring_def.branch {
+                Some(label) => ring_def.build(husk.branch(label)?)?,
+                None => ring_def.try_into()?,
+            };
+            husk.ring(ring)?;
         }
         Ok(husk)
     }

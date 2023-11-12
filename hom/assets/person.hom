@@ -31,10 +31,11 @@ ring:
 # Left Arm
 ring:
   branch: left_arm
+  smoothing: 1.0
+ring:
   axis: 0 0.05 0
   points: 1.4 1 * 5
   scale: 0.4
-  smoothing: 1.0
 ring:
   axis: 0.4 0.4 0
   points: 1 * 6
@@ -46,10 +47,11 @@ ring:
 # Right Arm
 ring:
   branch: right_arm
+  smoothing: 1.0
+ring:
   axis: 0 0.05 0
   points: 1 1 1 1.4 1 1
   scale: 0.4
-  smoothing: 1.0
 ring:
   axis: -0.4 0.4 0
   points: 1 * 6
