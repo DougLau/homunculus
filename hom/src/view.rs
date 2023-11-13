@@ -6,6 +6,7 @@ use bevy::{
     asset::LoadState,
     gltf::Gltf,
     input::mouse::{MouseMotion, MouseWheel},
+    pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
     render::primitives::Aabb,
     scene::InstanceId,
@@ -121,7 +122,8 @@ pub fn view_gltf(folder: String, path: PathBuf, stage: bool) {
                     ..default()
                 }),
         )
-        .add_systems(Startup, (spawn_light, start_loading))
+        .add_plugins(WireframePlugin)
+        .add_systems(Startup, (init_wireframe, spawn_light, start_loading))
         .add_systems(
             Update,
             (
@@ -132,9 +134,15 @@ pub fn view_gltf(folder: String, path: PathBuf, stage: bool) {
                 control_animation,
                 update_camera,
                 update_light_direction,
+                toggle_wireframe,
             ),
         )
         .run();
+}
+
+/// System to initialize wireframe config
+fn init_wireframe(mut wireframe_config: ResMut<WireframeConfig>) {
+    wireframe_config.global = false;
 }
 
 /// System to spawn light
@@ -242,7 +250,8 @@ fn bounding_box_meshes(
 /// Build camera bundle and controller
 fn build_camera(aabb: Aabb) -> (Camera3dBundle, CameraController) {
     let look = Vec3::from(aabb.center);
-    let pos = Vec3::from(aabb.center + aabb.half_extents * 4.0);
+    let pos = look
+        + Vec3::new(0.0, 2.0 * aabb.half_extents.y, 4.0 * aabb.half_extents.z);
     let bundle = Camera3dBundle {
         transform: Transform::from_translation(pos).looking_at(look, Vec3::Y),
         ..Default::default()
@@ -351,5 +360,17 @@ fn update_light_direction(
         for mut xform in &mut queries.p1() {
             xform.rotation = cam_rot;
         }
+    }
+}
+
+/// System to toggle wireframe
+fn toggle_wireframe(
+    input: Res<Input<KeyCode>>,
+    mut wireframe_config: ResMut<WireframeConfig>,
+) {
+    let shift =
+        input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight);
+    if shift && input.just_pressed(KeyCode::Z) {
+        wireframe_config.global = !wireframe_config.global;
     }
 }
