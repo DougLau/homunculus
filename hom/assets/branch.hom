@@ -1,6 +1,7 @@
 # Test .hom file with a single branch
 ring:
   points: 1 * 6
+  shading: Flat
 ring:
 ring:
   points: a 1 * 5
@@ -8,6 +9,7 @@ ring:
   points: 1 * 6
 ring:
   branch: a
+  shading: Flat
 ring:
   axis: 0 0.1 0
 ring:

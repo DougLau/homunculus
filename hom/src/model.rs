@@ -4,7 +4,7 @@
 //
 use anyhow::{anyhow, bail, Error};
 use glam::Vec3;
-use homunculus::{Husk, Ring};
+use homunculus::{Husk, Ring, Shading};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -35,8 +35,8 @@ pub struct RingDef {
     /// Scale factor
     scale: Option<f32>,
 
-    /// Smoothing setting
-    smoothing: Option<f32>,
+    /// Shading setting
+    shading: Option<String>,
 }
 
 /// Definition of a 3D model
@@ -92,6 +92,17 @@ impl RingDef {
         }
     }
 
+    /// Get shading
+    fn shading(&self) -> Result<Option<Shading>> {
+        match self.shading.as_deref() {
+            Some("Flat") => Ok(Some(Shading::Flat)),
+            Some("Smooth") => Ok(Some(Shading::Smooth)),
+            Some("Ringed") => Ok(Some(Shading::Ringed)),
+            Some(s) => bail!("Invalid shading: {s}"),
+            None => Ok(None),
+        }
+    }
+
     /// Get point definitions
     fn point_defs(&self) -> Result<Vec<PtDef>> {
         let mut defs = vec![];
@@ -128,8 +139,8 @@ impl RingDef {
         if let Some(scale) = self.scale {
             ring = ring.scale(scale);
         }
-        if let Some(smoothing) = self.smoothing {
-            ring = ring.smoothing(smoothing);
+        if let Some(shading) = self.shading()? {
+            ring = ring.shading(shading);
         }
         for pt in self.point_defs()? {
             ring = match pt {

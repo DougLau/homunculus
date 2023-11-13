@@ -29,8 +29,8 @@ pub struct Face {
     /// Vertex positions
     vtx: [usize; 3],
 
-    /// Vertex normal smoothing factors
-    smoothing: [f32; 3],
+    /// Surface number, for shading
+    surface: u16,
 }
 
 /// Mesh builder
@@ -57,23 +57,27 @@ pub struct Mesh {
 
 impl Face {
     /// Create a new face
-    pub fn new(vtx: [usize; 3], smoothing: [f32; 3]) -> Self {
+    pub fn new(vtx: [usize; 3], surface: u16) -> Self {
         debug_assert_ne!(vtx[0], vtx[1]);
         debug_assert_ne!(vtx[1], vtx[2]);
         debug_assert_ne!(vtx[2], vtx[0]);
-        Self { vtx, smoothing }
+        Self { vtx, surface }
     }
 
-    /// Check if face contains a vertex
-    fn contains(&self, idx: usize) -> bool {
-        self.vtx.contains(&idx)
+    /// Get surface number for a vertex
+    fn vertex_surface(&self, idx: usize) -> Option<u16> {
+        self.vtx.contains(&idx).then(|| self.surface)
     }
 
-    /// Check if a vertex is smooth
-    fn is_vertex_smooth(&self, idx: usize) -> bool {
-        (self.vtx[0] == idx && self.smoothing[0] == 1.0)
-            || (self.vtx[1] == idx && self.smoothing[1] == 1.0)
-            || (self.vtx[2] == idx && self.smoothing[2] == 1.0)
+    /// Split a vertex
+    fn split_vertex(&mut self, idx: usize, i: usize) {
+        if self.vtx[0] == idx {
+            self.vtx[0] = i;
+        } else if self.vtx[1] == idx {
+            self.vtx[1] = i;
+        } else if self.vtx[2] == idx {
+            self.vtx[2] = i;
+        }
     }
 }
 
@@ -124,32 +128,46 @@ impl MeshBuilder {
 
     /// Check if a vertex needs splitting
     fn vertex_needs_split(&self, idx: usize) -> bool {
-        let mut found = false;
+        let mut surface = None;
         for face in &self.faces {
-            if face.contains(idx) && !face.is_vertex_smooth(idx) {
-                if found {
+            let surf = face.vertex_surface(idx);
+            if let (Some(s), Some(sf)) = (surf, surface) {
+                if s != sf {
                     return true;
                 }
-                found = true;
             }
+            surface = surf;
         }
         false
     }
 
     /// Split one vertex
     fn split_vertex(&mut self, idx: usize) {
-        let pos = self.pos[idx];
-        let i = self.push_vtx(pos);
-        for face in &mut self.faces {
-            if face.contains(idx) && !face.is_vertex_smooth(idx) {
-                if face.vtx[0] == idx {
-                    face.vtx[0] = i;
-                } else if face.vtx[1] == idx {
-                    face.vtx[1] = i;
-                } else if face.vtx[2] == idx {
-                    face.vtx[2] = i;
+        let mut surfaces = Vec::with_capacity(8);
+        for face in &self.faces {
+            if let Some(surf) = face.vertex_surface(idx) {
+                if surfaces.is_empty() {
+                    surfaces.push((surf, idx));
+                } else if !surfaces.iter().any(|(s, _i)| surf == *s) {
+                    surfaces.push((surf, 0));
                 }
-                break;
+            }
+        }
+        let pos = self.pos[idx];
+        for i in 0..surfaces.len() {
+            if surfaces[i].1 == 0 {
+                surfaces[i].1 = self.push_vtx(pos);
+            }
+        }
+        for face in &mut self.faces {
+            if let Some(surf) = face.vertex_surface(idx) {
+                if let Some(i) =
+                    surfaces.iter().find_map(|(s, i)| (surf == *s).then(|| i))
+                {
+                    if *i != idx {
+                        face.split_vertex(idx, *i);
+                    }
+                }
             }
         }
     }

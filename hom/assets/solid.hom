@@ -1,6 +1,7 @@
 ring:
   points: 1 * 24
   scale: 1.5
+  shading: Flat
 ring:
   points: 1 0.1 1 1 1 1
   scale: 1.0

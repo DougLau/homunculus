@@ -12,4 +12,4 @@ mod ring;
 
 pub use error::Error;
 pub use husk::Husk;
-pub use ring::{Ring, Spoke};
+pub use ring::{Ring, Shading, Spoke};

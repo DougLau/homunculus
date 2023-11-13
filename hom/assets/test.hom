@@ -2,6 +2,7 @@
 ring:
   points: 1 * 6
   scale: 0.5
+  shading: Flat
 ring:
   axis: 0.1 1 0
 ring:

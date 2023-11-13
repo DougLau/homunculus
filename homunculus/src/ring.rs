@@ -33,6 +33,19 @@ pub struct Spoke {
     pub label: Option<String>,
 }
 
+/// Vertex normal shading
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shading {
+    /// Flat shading
+    Flat,
+
+    /// Smooth shading
+    Smooth,
+
+    /// Ringed shading
+    Ringed,
+}
+
 /// Empty ring spokes
 const EMPTY_RING: &[Spoke] = &[Spoke {
     distance: 0.0,
@@ -72,8 +85,8 @@ pub struct Ring {
     /// Spoke scale factor
     scale: Option<f32>,
 
-    /// Vertex normal smoothing
-    smoothing: Option<f32>,
+    /// Vertex normal shading
+    shading: Option<Shading>,
 
     /// Spokes from center to ring
     spokes: Vec<Spoke>,
@@ -147,6 +160,13 @@ impl From<(f32, &str)> for Spoke {
     }
 }
 
+impl Point {
+    /// Create a new point
+    pub fn new(pt: Pt, order: Degrees) -> Self {
+        Point { pt, order }
+    }
+}
+
 impl Ring {
     /// Create a new ring from a branch
     pub(crate) fn with_branch(branch: Branch, builder: &MeshBuilder) -> Self {
@@ -158,13 +178,13 @@ impl Ring {
             spacing: None,
             xform,
             scale: None,
-            smoothing: None,
+            shading: None,
             spokes: vec![Spoke::default(); count],
             points: Vec::new(),
         };
         ring.transform_rotate(axis);
         for (order, vid) in branch.edge_angles(&ring, builder) {
-            ring.push_pt(order, Pt::Vertex(vid));
+            ring.push_pt(Pt::Vertex(vid), order);
         }
         ring
     }
@@ -181,7 +201,7 @@ impl Ring {
             spacing,
             xform: self.xform * ring.xform,
             scale: ring.scale.or(self.scale),
-            smoothing: ring.smoothing.or(self.smoothing),
+            shading: ring.shading.or(self.shading),
             spokes,
             points: Vec::new(),
         };
@@ -220,17 +240,11 @@ impl Ring {
         self
     }
 
-    /// Set normal smoothing factor
+    /// Set vertex normal shading
     ///
-    /// Ranges from `0.0` (flat) to `1.0` (smooth)
-    ///
-    /// # Panics
-    ///
-    /// - If smoothing is negative, infinite, or NaN
-    pub fn smoothing(mut self, smoothing: f32) -> Self {
-        assert!(smoothing.is_finite());
-        assert!(smoothing.is_sign_positive());
-        self.smoothing = Some(smoothing.min(1.0));
+    /// Values: `Flat`, `Smooth`, or `Ringed`
+    pub fn shading(mut self, shading: Shading) -> Self {
+        self.shading = Some(shading);
         self
     }
 
@@ -239,9 +253,9 @@ impl Ring {
         self.scale.unwrap_or(1.0)
     }
 
-    /// Get the normal smoothing factor (or default value)
-    pub(crate) fn smoothing_or_default(&self) -> f32 {
-        self.smoothing.unwrap_or(0.0)
+    /// Get the vertex normal shading (or default value)
+    pub(crate) fn shading_or_default(&self) -> Shading {
+        self.shading.unwrap_or(Shading::Smooth)
     }
 
     /// Add a spoke
@@ -345,17 +359,12 @@ impl Ring {
             match &spoke.label {
                 None => {
                     let vid = builder.push_vtx(pos);
-                    let point = Point {
-                        order,
-                        pt: Pt::Vertex(vid),
-                    };
+                    let point = Point::new(Pt::Vertex(vid), order);
                     points.push(point);
                 }
                 Some(label) => {
-                    let point = Point {
-                        order,
-                        pt: Pt::Branch(label.to_string(), pos),
-                    };
+                    let point =
+                        Point::new(Pt::Branch(label.to_string(), pos), order);
                     points.push(point);
                 }
             }
@@ -364,8 +373,8 @@ impl Ring {
     }
 
     /// Push point on ring
-    pub(crate) fn push_pt(&mut self, order: Degrees, pt: Pt) {
-        self.points.push(Point { order, pt });
+    pub(crate) fn push_pt(&mut self, pt: Pt, order: Degrees) {
+        self.points.push(Point::new(pt, order));
     }
 
     /// Get iterator of points on ring

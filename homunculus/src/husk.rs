@@ -5,7 +5,7 @@
 use crate::error::{Error, Result};
 use crate::gltf;
 use crate::mesh::{Face, Mesh, MeshBuilder};
-use crate::ring::{Branch, Degrees, Point, Pt, Ring};
+use crate::ring::{Branch, Degrees, Point, Pt, Ring, Shading};
 use glam::Vec3;
 use std::collections::HashMap;
 use std::io::Write;
@@ -30,6 +30,9 @@ pub struct Husk {
     /// Mesh builder
     builder: MeshBuilder,
 
+    /// Current surface
+    surface: u16,
+
     /// Current ring
     ring: Option<Ring>,
 
@@ -48,6 +51,7 @@ impl Husk {
     pub fn new() -> Self {
         Husk {
             builder: Mesh::builder(),
+            surface: 0,
             ring: None,
             branches: HashMap::new(),
         }
@@ -87,7 +91,7 @@ impl Husk {
     /// All unset properties are copied from the previous ring:
     /// - spacing
     /// - scale
-    /// - smoothing
+    /// - shading
     /// - spokes
     pub fn ring(&mut self, ring: Ring) -> Result<()> {
         let pring = self.ring.take();
@@ -125,15 +129,19 @@ impl Husk {
         // add hub point
         let (order, pos) = ring.make_hub();
         let vid = self.builder.push_vtx(pos);
-        let hub = Pt::Vertex(vid);
-        let sm = ring.smoothing_or_default();
-        let hub = Point { order, pt: hub };
+        let hub = Point::new(Pt::Vertex(vid), order);
         let mut prev = last.clone();
         for pt in pts.drain(..) {
-            self.add_face([&pt, &prev, &hub], [sm, sm, sm])?;
+            self.add_face([&pt, &prev, &hub])?;
             prev = pt;
+            if ring.shading_or_default() == Shading::Flat {
+                self.surface += 1;
+            }
         }
-        self.add_face([&last, &prev, &hub], [sm, sm, sm])?;
+        self.add_face([&last, &prev, &hub])?;
+        if ring.shading_or_default() == Shading::Flat {
+            self.surface += 1;
+        }
         Ok(())
     }
 
@@ -157,48 +165,53 @@ impl Husk {
 
     /// Make a band of faces between two rings
     fn make_band(&mut self, ring0: &Ring, ring1: &Ring) -> Result<()> {
+        if ring0.shading_or_default() != Shading::Smooth {
+            self.surface += 1;
+        }
         // get points for each ring
         let mut pts0 = ring0.points_offset(ring1.half_step());
         let mut pts1 = ring1.points_offset(ring0.half_step());
         // unwrap note: ring will always have at least one point
         let first0 = pts0.pop().unwrap();
         let first1 = pts1.pop().unwrap();
+        let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
         let mut band = Vec::with_capacity(pts0.len() + pts1.len());
         band.extend_from_slice(&pts0[..]);
         band.append(&mut pts1);
         band.sort_by(|a, b| b.order.partial_cmp(&a.order).unwrap());
-        let (mut pt0, mut pt1) = (first0.clone(), first1.clone());
-        let sm0 = ring0.smoothing_or_default();
-        let sm1 = ring1.smoothing_or_default();
         // create faces of band as a triangle strip
         while let Some(pt) = band.pop() {
-            let sm = if pts0.contains(&pt) { sm0 } else { sm1 };
-            self.add_face([&pt1, &pt0, &pt], [sm1, sm0, sm])?;
+            self.add_face([&pt1, &pt0, &pt])?;
             if pts0.contains(&pt) {
                 pt0 = pt;
             } else {
                 pt1 = pt;
             }
+            if ring0.shading_or_default() == Shading::Flat {
+                self.surface += 1;
+            }
         }
         // connect with first vertices on band
         if pt1 != first1 {
-            self.add_face([&pt1, &pt0, &first1], [sm1, sm0, sm1])?;
+            self.add_face([&pt1, &pt0, &first1])?;
+            if ring0.shading_or_default() == Shading::Flat {
+                self.surface += 1;
+            }
         }
         if pt0 != first0 {
-            self.add_face([&first0, &first1, &pt0], [sm0, sm1, sm0])?;
+            self.add_face([&first0, &first1, &pt0])?;
+            if ring0.shading_or_default() == Shading::Flat {
+                self.surface += 1;
+            }
         }
         Ok(())
     }
 
     /// Add a triangle face
-    fn add_face(
-        &mut self,
-        pts: [&Point; 3],
-        smoothing: [f32; 3],
-    ) -> Result<()> {
+    fn add_face(&mut self, pts: [&Point; 3]) -> Result<()> {
         match (&pts[0].pt, &pts[1].pt, &pts[2].pt) {
             (Pt::Vertex(v0), Pt::Vertex(v1), Pt::Vertex(v2)) => {
-                let face = Face::new([*v0, *v1, *v2], smoothing);
+                let face = Face::new([*v0, *v1, *v2], self.surface);
                 self.builder.push_face(face);
             }
             (Pt::Branch(lbl, _), Pt::Vertex(v0), Pt::Vertex(v1))

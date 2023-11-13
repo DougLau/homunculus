@@ -1,0 +1,30 @@
+ring:
+  axis: 1 0 0
+  points: 1 * 16
+  shading: Ringed
+ring:
+  scale: 1.4
+  shading: Smooth
+ring:
+  axis: 0.1 1 0
+  scale: 1.0
+  shading: Ringed
+ring:
+  scale: 1.4
+  shading: Smooth
+ring:
+  axis: -0.1 1 0.1
+  scale: 1
+  shading: Ringed
+ring:
+  scale: 1.4
+  shading: Smooth
+ring:
+  scale: 1
+  shading: Ringed
+ring:
+  scale: 1.4
+  shading: Smooth
+ring:
+  scale: 1
+  shading: Ringed
