@@ -1,10 +1,10 @@
 [package]
 name = "homunculus"
-description = "Experimental 3D modeling library"
+description = "3D modeling library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DougLau/homunculus/tree/main/homunculus"
 readme = "README.md"
-keywords = ["3D", "modeling", "gltf", "bevy"]
+keywords = ["3D", "modeling", "gltf"]
 version.workspace = true
 edition.workspace = true
 

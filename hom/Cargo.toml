@@ -1,10 +1,10 @@
 [package]
 name = "hom"
-description = "Experimental 3D modeling program"
+description = "3D modeling program/viewer"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DougLau/homunculus/tree/main/hom"
 readme = "README.md"
-keywords = ["3D", "modeling", "gltf"]
+keywords = ["3D", "modeling", "gltf", "bevy"]
 version.workspace = true
 edition.workspace = true
 
