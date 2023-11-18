@@ -66,7 +66,7 @@ impl Face {
 
     /// Get surface number for a vertex
     fn vertex_surface(&self, idx: usize) -> Option<u16> {
-        self.vtx.contains(&idx).then(|| self.surface)
+        self.vtx.contains(&idx).then_some(self.surface)
     }
 
     /// Split a vertex
@@ -154,15 +154,15 @@ impl MeshBuilder {
             }
         }
         let pos = self.pos[idx];
-        for i in 0..surfaces.len() {
-            if surfaces[i].1 == 0 {
-                surfaces[i].1 = self.push_vtx(pos);
+        for surface in &mut surfaces {
+            if surface.1 == 0 {
+                surface.1 = self.push_vtx(pos);
             }
         }
         for face in &mut self.faces {
             if let Some(surf) = face.vertex_surface(idx) {
                 if let Some(i) =
-                    surfaces.iter().find_map(|(s, i)| (surf == *s).then(|| i))
+                    surfaces.iter().find_map(|(s, i)| (surf == *s).then_some(i))
                 {
                     if *i != idx {
                         face.split_vertex(idx, *i);
