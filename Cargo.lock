@@ -1990,8 +1990,8 @@ dependencies = [
 name = "homunculus"
 version = "0.3.1"
 dependencies = [
+ "anyhow",
  "glam",
- "muon-rs",
  "serde",
  "serde_json",
  "serde_repr",

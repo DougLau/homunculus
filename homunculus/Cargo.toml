@@ -16,4 +16,4 @@ serde_repr = "0.1"
 thiserror = "1"
 
 [dev-dependencies]
-muon-rs = "0.2"
+anyhow = "1"
