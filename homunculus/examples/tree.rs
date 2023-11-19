@@ -31,7 +31,7 @@ fn make_branch(husk: &mut Husk, mut scale: f32) -> Result<Vec<Branch>> {
     let mut branches = Vec::new();
     let mut i = 0;
     while scale > 0.05 {
-        let mut ring;
+        let ring;
         if i % 3 == 1 && fastrand::f32() > scale {
             let label = format!("B{}", fastrand::u16(..10000));
             ring = make_ring(Some(&label));
