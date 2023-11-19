@@ -1979,7 +1979,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hom"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "homunculus"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "fastrand 2.0.1",
@@ -2439,9 +2439,9 @@ dependencies = [
 
 [[package]]
 name = "nonmax"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e4a593ea4fffed8684ad13d75c82cf0b6dc2b88947e0ed85b9e70f555a7e422"
+checksum = "610a5acd306ec67f907abe5567859a3c693fb9886eb1f012ab8f2a47bef3db51"
 
 [[package]]
 name = "ntapi"
