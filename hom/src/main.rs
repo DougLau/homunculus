@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
+mod cube;
+mod mesh;
 mod model;
 mod view;
 
@@ -14,10 +16,10 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 /// Crate name
-const NAME: &'static str = std::env!("CARGO_PKG_NAME");
+const NAME: &str = std::env!("CARGO_PKG_NAME");
 
 /// Crate version
-const VERSION: &'static str = std::env!("CARGO_PKG_VERSION");
+const VERSION: &str = std::env!("CARGO_PKG_VERSION");
 
 /// Command-line arguments
 #[derive(FromArgs, PartialEq, Debug)]
@@ -114,9 +116,7 @@ impl ViewCommand {
         let path = Path::new(&self.file);
         let stem = path.file_stem().context("Invalid file name")?;
         match path.extension() {
-            Some(ext) if ext == "glb" || ext == "gltf" => {
-                Ok(path.into())
-            }
+            Some(ext) if ext == "glb" || ext == "gltf" => Ok(path.into()),
             _ => Ok(Path::new(stem).with_extension("glb")),
         }
     }
