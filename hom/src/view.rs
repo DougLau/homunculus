@@ -2,6 +2,7 @@
 //
 // Copyright (c) 2022-2023  Douglas Lau
 //
+use crate::cube::build_cube;
 use bevy::{
     asset::LoadState,
     gltf::Gltf,
@@ -19,7 +20,6 @@ use std::path::PathBuf;
 #[derive(Resource)]
 struct PathConfig {
     path: PathBuf,
-    stage: bool,
 }
 
 /// Scene state
@@ -39,7 +39,6 @@ struct SceneRes {
     id: Option<InstanceId>,
     animations: Vec<Handle<AnimationClip>>,
     state: SceneState,
-    stage: bool,
 }
 
 /// Camera controller component
@@ -48,6 +47,14 @@ struct CameraController {
     focus: Vec3,
     radius: f32,
 }
+
+/// Cursor for camera
+#[derive(Component)]
+struct Cursor;
+
+/// Stage (ground)
+#[derive(Component)]
+struct Stage;
 
 impl CameraController {
     /// Create a new camera controller
@@ -59,51 +66,58 @@ impl CameraController {
     }
 
     /// Update camera transform
-    fn update_transform(&self, transform: &mut Transform) {
-        let rot = Mat3::from_quat(transform.rotation);
-        transform.translation =
+    fn update_transform(&self, xform: &mut Transform) {
+        let rot = Mat3::from_quat(xform.rotation);
+        xform.translation =
             self.focus + rot.mul_vec3(Vec3::new(0.0, 0.0, self.radius));
     }
 
     /// Pan camera
-    fn pan(&mut self, transform: &mut Transform, motion: Vec2, win_sz: Vec2) {
+    fn pan(&mut self, xform: &mut Transform, motion: Vec2, win_sz: Vec2) {
         let proj = PerspectiveProjection::default(); // FIXME
         let pan =
             motion * Vec2::new(proj.fov * proj.aspect_ratio, proj.fov) / win_sz;
-        let right = transform.rotation * Vec3::X * -pan.x;
-        let up = transform.rotation * Vec3::Y * pan.y;
+        let right = xform.rotation * Vec3::X * -pan.x;
+        let up = xform.rotation * Vec3::Y * pan.y;
         let translation = (right + up) * self.radius;
         self.focus += translation;
-        self.update_transform(transform);
+        self.update_transform(xform);
     }
 
     /// Rotate camera
-    fn rotate(
-        &mut self,
-        transform: &mut Transform,
-        motion: Vec2,
-        win_sz: Vec2,
-    ) {
+    fn rotate(&mut self, xform: &mut Transform, motion: Vec2, win_sz: Vec2) {
         let delta_x = motion.x / win_sz.x * PI;
         let delta_y = motion.y / win_sz.y * PI;
-        transform.rotation = Quat::from_rotation_y(-delta_x * 2.0)
-            * transform.rotation
+        xform.rotation = Quat::from_rotation_y(-delta_x * 2.0)
+            * xform.rotation
             * Quat::from_rotation_x(-delta_y);
-        self.update_transform(transform);
+        self.update_transform(xform);
+    }
+
+    /// Move camera forward / reverse
+    fn forward_reverse(&mut self, xform: &mut Transform, motion: f32) {
+        let pos = xform.translation;
+        let rot = Mat3::from_quat(xform.rotation);
+        let dist = self.radius + motion * self.radius * 0.1;
+        self.focus = pos - rot.mul_vec3(Vec3::new(0.0, 0.0, dist));
+        self.update_transform(xform);
     }
 
     /// Zoom camera in or out
-    fn zoom(&mut self, transform: &mut Transform, motion: f32) {
-        self.radius -= motion * self.radius * 0.2;
-        self.radius = self.radius.max(0.1);
-        self.update_transform(transform);
+    fn zoom(&mut self, xform: &mut Transform, motion: f32) {
+        if motion < 0.0 {
+            self.radius -= motion * self.radius.max(1.0) * 0.1;
+        } else {
+            self.radius -= motion * self.radius * 0.1;
+        }
+        self.update_transform(xform);
     }
 }
 
 /// View glTF in an app window
-pub fn view_gltf(folder: String, path: PathBuf, stage: bool) {
+pub fn view_gltf(folder: String, path: PathBuf) {
     let mut app = App::new();
-    app.insert_resource(PathConfig { path, stage })
+    app.insert_resource(PathConfig { path })
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 0.5,
@@ -132,8 +146,10 @@ pub fn view_gltf(folder: String, path: PathBuf, stage: bool) {
                 spawn_camera,
                 start_animation,
                 control_animation,
-                update_camera,
+                pan_rotate_camera,
+                zoom_camera,
                 update_light_direction,
+                toggle_stage,
                 toggle_wireframe,
             ),
         )
@@ -167,7 +183,6 @@ fn start_loading(
         id: None,
         animations: Vec::new(),
         state: SceneState::Loading,
-        stage: config.stage,
     });
 }
 
@@ -216,22 +231,35 @@ fn spawn_camera(
     }
     scene_res.state = SceneState::StartAnimation;
     let aabb = bounding_box_meshes(query);
-    let (bundle, controller) = build_camera(aabb);
-    commands.spawn(bundle).insert(controller);
-    if scene_res.stage {
-        let min = aabb.min();
-        let max = aabb.max();
-        let size = (max.x - min.x).max(max.y - min.y).max(max.z - min.z);
-        commands.spawn(PbrBundle {
+    commands.spawn(camera_bundle(aabb));
+    commands.spawn((
+        Cursor,
+        MaterialMeshBundle {
+            mesh: meshes.add(build_cube()),
+            material: materials.add(StandardMaterial {
+                base_color: Color::FUCHSIA,
+                ..Default::default()
+            }),
+            transform: Transform::from_translation(aabb.center.into()),
+            ..Default::default()
+        },
+    ));
+
+    let min = aabb.min();
+    let max = aabb.max();
+    let size = (max.x - min.x).max(max.y - min.y).max(max.z - min.z);
+    commands.spawn((
+        Stage,
+        MaterialMeshBundle {
             mesh: meshes.add(Mesh::from(shape::Plane::from_size(size))),
             material: materials.add(StandardMaterial {
                 base_color: Color::DARK_GREEN,
-                perceptual_roughness: 1.0,
                 ..default()
             }),
+            visibility: Visibility::Hidden,
             ..Default::default()
-        });
-    }
+        },
+    ));
 }
 
 /// Get a bounding box containing all meshes
@@ -247,17 +275,19 @@ fn bounding_box_meshes(
     Aabb::from_min_max(min, max)
 }
 
-/// Build camera bundle and controller
-fn build_camera(aabb: Aabb) -> (Camera3dBundle, CameraController) {
+/// Build camera bundle with controller
+fn camera_bundle(aabb: Aabb) -> (Camera3dBundle, CameraController) {
     let look = Vec3::from(aabb.center);
     let pos = look
         + Vec3::new(0.0, 2.0 * aabb.half_extents.y, 4.0 * aabb.half_extents.z);
-    let bundle = Camera3dBundle {
-        transform: Transform::from_translation(pos).looking_at(look, Vec3::Y),
-        ..Default::default()
-    };
-    let controller = CameraController::new(pos, look);
-    (bundle, controller)
+    (
+        Camera3dBundle {
+            transform: Transform::from_translation(pos)
+                .looking_at(look, Vec3::Y),
+            ..Default::default()
+        },
+        CameraController::new(pos, look),
+    )
 }
 
 /// System to start the animation player
@@ -300,43 +330,42 @@ fn control_animation(
     }
 }
 
-/// System to update the camera
-fn update_camera(
+/// System to pan/rotate the camera
+#[allow(clippy::type_complexity)]
+fn pan_rotate_camera(
     windows: Query<&Window, With<PrimaryWindow>>,
-    mut ev_motion: EventReader<MouseMotion>,
-    mut ev_scroll: EventReader<MouseWheel>,
     mouse: Res<Input<MouseButton>>,
+    mut ev_motion: EventReader<MouseMotion>,
     keyboard: Res<Input<KeyCode>>,
-    mut query: Query<(&mut CameraController, &mut Transform)>,
+    mut queries: ParamSet<(
+        Query<(&mut CameraController, &mut Transform)>,
+        Query<&mut Transform, With<Cursor>>,
+    )>,
 ) {
-    let (mut controller, mut transform) = match query.get_single_mut() {
-        Ok((controller, transform)) => (controller, transform),
-        Err(_) => return,
-    };
+    if !mouse.pressed(MouseButton::Middle) {
+        return;
+    }
 
-    if mouse.pressed(MouseButton::Middle) {
-        let mut motion = Vec2::ZERO;
-        for ev in ev_motion.read() {
-            motion += ev.delta;
-        }
-        if motion.length_squared() > 0.0 {
-            let win_sz = primary_window_size(windows);
-            if keyboard.pressed(KeyCode::ShiftLeft)
-                || keyboard.pressed(KeyCode::ShiftRight)
-            {
-                controller.pan(&mut transform, motion, win_sz);
+    let mut motion = Vec2::ZERO;
+    for ev in ev_motion.read() {
+        motion += ev.delta;
+    }
+    if motion.length_squared() > 0.0 {
+        let mut focus = Vec3::default();
+        let win_sz = primary_window_size(windows);
+        let pan_rotate = keyboard.pressed(KeyCode::ShiftLeft)
+            || keyboard.pressed(KeyCode::ShiftRight);
+        if let Ok((mut cam, mut xform)) = queries.p0().get_single_mut() {
+            if pan_rotate {
+                cam.pan(&mut xform, motion, win_sz);
             } else {
-                controller.rotate(&mut transform, motion, win_sz);
+                cam.rotate(&mut xform, motion, win_sz);
             }
+            focus = cam.focus;
         }
-    } else {
-        let mut motion = 0.0;
-        for ev in ev_scroll.read() {
-            motion += ev.y;
-        }
-        if motion.abs() > 0.0 {
-            controller.zoom(&mut transform, motion);
-        }
+        if let Ok(mut xform) = queries.p1().get_single_mut() {
+            xform.translation = focus;
+        };
     }
 }
 
@@ -344,6 +373,39 @@ fn update_camera(
 fn primary_window_size(windows: Query<&Window, With<PrimaryWindow>>) -> Vec2 {
     let window = windows.get_single().unwrap();
     Vec2::new(window.width(), window.height())
+}
+
+/// System to zoom the camera
+#[allow(clippy::type_complexity)]
+fn zoom_camera(
+    mouse: Res<Input<MouseButton>>,
+    mut ev_scroll: EventReader<MouseWheel>,
+    mut queries: ParamSet<(
+        Query<(&mut CameraController, &mut Transform)>,
+        Query<&mut Transform, With<Cursor>>,
+    )>,
+) {
+    let mut motion = 0.0;
+    for ev in ev_scroll.read() {
+        motion += ev.y;
+    }
+    if motion.abs() > 0.0 {
+        let mut focus = Vec3::default();
+        let mut scale = 1.0;
+        if let Ok((mut cam, mut xform)) = queries.p0().get_single_mut() {
+            if mouse.pressed(MouseButton::Middle) {
+                cam.forward_reverse(&mut xform, motion);
+            } else {
+                cam.zoom(&mut xform, motion);
+            };
+            focus = cam.focus;
+            scale = cam.radius;
+        }
+        if let Ok(mut xform) = queries.p1().get_single_mut() {
+            xform.translation = focus;
+            xform.scale = Vec3::splat(scale * 0.02);
+        };
+    }
 }
 
 /// System to update the directional light
@@ -360,6 +422,21 @@ fn update_light_direction(
         for mut xform in &mut queries.p1() {
             xform.rotation = cam_rot;
         }
+    }
+}
+
+/// System to toggle stage
+fn toggle_stage(
+    input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Visibility, With<Stage>>,
+) {
+    if input.just_pressed(KeyCode::S) {
+        let mut vis = query.single_mut();
+        *vis = if *vis == Visibility::Hidden {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
