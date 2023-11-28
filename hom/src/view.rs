@@ -320,7 +320,7 @@ fn start_animation(
 /// System to control animations
 fn control_animation(
     scene_res: Res<SceneRes>,
-    mouse: Res<Input<MouseButton>>,
+    input: Res<Input<KeyCode>>,
     mut players: Query<&mut AnimationPlayer>,
     mut animation_idx: Local<usize>,
     mut is_changing: Local<bool>,
@@ -329,14 +329,15 @@ fn control_animation(
         return;
     }
     let mut player = players.get_single_mut().unwrap();
-    if mouse.pressed(MouseButton::Right) {
+    if input.pressed(KeyCode::Space) {
         player.pause();
         *is_changing = true;
     } else if *is_changing {
         *animation_idx = (*animation_idx + 1) % scene_res.animations.len();
         player
-            .play(scene_res.animations[*animation_idx].clone_weak())
+            .start(scene_res.animations[*animation_idx].clone_weak())
             .repeat();
+        player.resume();
         *is_changing = false;
     }
 }
