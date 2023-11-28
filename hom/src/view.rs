@@ -137,10 +137,14 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                 }),
         )
         .add_plugins(WireframePlugin)
-        .add_systems(Startup, (init_wireframe, spawn_light, start_loading))
+        .add_systems(
+            Startup,
+            (init_wireframe, init_gizmo, spawn_light, start_loading),
+        )
         .add_systems(
             Update,
             (
+                draw_cursor,
                 spawn_scene,
                 check_ready,
                 spawn_camera,
@@ -159,6 +163,13 @@ pub fn view_gltf(folder: String, path: PathBuf) {
 /// System to initialize wireframe config
 fn init_wireframe(mut wireframe_config: ResMut<WireframeConfig>) {
     wireframe_config.global = false;
+}
+
+/// System to initialize gizmo config
+fn init_gizmo(mut config: ResMut<GizmoConfig>) {
+    config.line_width = 10.0;
+    config.line_perspective = true;
+    config.depth_bias = -1.0;
 }
 
 /// System to spawn light
@@ -327,6 +338,13 @@ fn control_animation(
             .play(scene_res.animations[*animation_idx].clone_weak())
             .repeat();
         *is_changing = false;
+    }
+}
+
+/// System to draw cursor gizmo
+fn draw_cursor(mut gizmos: Gizmos, query: Query<&Transform, With<Cursor>>) {
+    for xform in &query {
+        gizmos.cuboid(xform.clone(), Color::FUCHSIA);
     }
 }
 
