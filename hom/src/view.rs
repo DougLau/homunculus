@@ -139,7 +139,13 @@ pub fn view_gltf(folder: String, path: PathBuf) {
         .add_plugins(WireframePlugin)
         .add_systems(
             Startup,
-            (init_wireframe, init_gizmo, spawn_light, start_loading),
+            (
+                init_wireframe,
+                init_gizmo,
+                spawn_light,
+                spawn_help,
+                start_loading,
+            ),
         )
         .add_systems(
             Update,
@@ -155,6 +161,7 @@ pub fn view_gltf(folder: String, path: PathBuf) {
                 update_light_direction,
                 toggle_stage,
                 toggle_wireframe,
+                toggle_help,
             ),
         )
         .run();
@@ -181,6 +188,36 @@ fn spawn_light(mut commands: Commands) {
         },
         ..Default::default()
     });
+}
+
+/// System to spawn help text
+fn spawn_help(mut commands: Commands) {
+    commands.spawn(
+        TextBundle::from_section(
+            "_____ Mouse _____\n\
+             right: pan camera\n\
+             middle: rotate camera\n\
+             wheel: zoom camera\n\
+             /pressed: forward/back\n\
+             \n\
+             _____ Keys _____\n\
+             'Q': toggle help text\n\
+             'W': toggle wireframe\n\
+             'S': toggle stage\n\
+             'D': light direction\n\
+             Space: next animation",
+            TextStyle {
+                font_size: 18.0,
+                ..default()
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(12.0),
+            right: Val::Px(12.0),
+            ..default()
+        }),
+    );
 }
 
 /// System to start loading scene
@@ -466,5 +503,21 @@ fn toggle_wireframe(
 ) {
     if keyboard.just_pressed(KeyCode::W) {
         wireframe_config.global = !wireframe_config.global;
+    }
+}
+
+/// System to toggle help text
+fn toggle_help(
+    keyboard: Res<Input<KeyCode>>,
+    mut query: Query<&mut Visibility, With<Text>>,
+) {
+    if keyboard.just_pressed(KeyCode::Q) {
+        for mut vis in &mut query {
+            *vis = if *vis == Visibility::Hidden {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+        }
     }
 }
