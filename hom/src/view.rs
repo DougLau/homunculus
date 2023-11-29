@@ -323,7 +323,7 @@ fn start_animation(
 /// System to control animations
 fn control_animation(
     scene_res: Res<SceneRes>,
-    input: Res<Input<KeyCode>>,
+    keyboard: Res<Input<KeyCode>>,
     mut players: Query<&mut AnimationPlayer>,
     mut animation_idx: Local<usize>,
     mut is_changing: Local<bool>,
@@ -332,7 +332,7 @@ fn control_animation(
         return;
     }
     let mut player = players.get_single_mut().unwrap();
-    if input.pressed(KeyCode::Space) {
+    if keyboard.pressed(KeyCode::Space) {
         player.pause();
         *is_changing = true;
     } else if *is_changing {
@@ -358,13 +358,13 @@ fn pan_rotate_camera(
     windows: Query<&Window, With<PrimaryWindow>>,
     mouse: Res<Input<MouseButton>>,
     mut ev_motion: EventReader<MouseMotion>,
-    keyboard: Res<Input<KeyCode>>,
     mut queries: ParamSet<(
         Query<(&mut CameraController, &mut Transform)>,
         Query<&mut Transform, With<Cursor>>,
     )>,
 ) {
-    if !mouse.pressed(MouseButton::Middle) {
+    if !mouse.pressed(MouseButton::Right) && !mouse.pressed(MouseButton::Middle)
+    {
         return;
     }
 
@@ -373,21 +373,18 @@ fn pan_rotate_camera(
         motion += ev.delta;
     }
     if motion.length_squared() > 0.0 {
-        let mut focus = Vec3::default();
         let win_sz = primary_window_size(windows);
-        let pan_rotate = keyboard.pressed(KeyCode::ShiftLeft)
-            || keyboard.pressed(KeyCode::ShiftRight);
         if let Ok((mut cam, mut xform)) = queries.p0().get_single_mut() {
-            if pan_rotate {
+            if mouse.pressed(MouseButton::Right) {
                 cam.pan(&mut xform, motion, win_sz);
+                let focus = cam.focus;
+                if let Ok(mut xform) = queries.p1().get_single_mut() {
+                    xform.translation = focus;
+                };
             } else {
                 cam.rotate(&mut xform, motion, win_sz);
             }
-            focus = cam.focus;
         }
-        if let Ok(mut xform) = queries.p1().get_single_mut() {
-            xform.translation = focus;
-        };
     }
 }
 
@@ -433,13 +430,13 @@ fn zoom_camera(
 /// System to update the directional light
 #[allow(clippy::type_complexity)]
 fn update_light_direction(
-    mouse: Res<Input<MouseButton>>,
+    keyboard: Res<Input<KeyCode>>,
     mut queries: ParamSet<(
         Query<&Transform, With<CameraController>>,
         Query<&mut Transform, With<DirectionalLight>>,
     )>,
 ) {
-    if mouse.pressed(MouseButton::Left) {
+    if keyboard.just_pressed(KeyCode::D) {
         let cam_rot = queries.p0().get_single().unwrap().rotation;
         for mut xform in &mut queries.p1() {
             xform.rotation = cam_rot;
@@ -449,10 +446,10 @@ fn update_light_direction(
 
 /// System to toggle stage
 fn toggle_stage(
-    input: Res<Input<KeyCode>>,
+    keyboard: Res<Input<KeyCode>>,
     mut query: Query<&mut Visibility, With<Stage>>,
 ) {
-    if input.just_pressed(KeyCode::S) {
+    if keyboard.just_pressed(KeyCode::S) {
         let mut vis = query.single_mut();
         *vis = if *vis == Visibility::Hidden {
             Visibility::Visible
@@ -464,12 +461,10 @@ fn toggle_stage(
 
 /// System to toggle wireframe
 fn toggle_wireframe(
-    input: Res<Input<KeyCode>>,
+    keyboard: Res<Input<KeyCode>>,
     mut wireframe_config: ResMut<WireframeConfig>,
 ) {
-    let shift =
-        input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight);
-    if shift && input.just_pressed(KeyCode::Z) {
+    if keyboard.just_pressed(KeyCode::W) {
         wireframe_config.global = !wireframe_config.global;
     }
 }
