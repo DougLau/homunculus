@@ -45,7 +45,7 @@ struct SceneRes {
 #[derive(Component)]
 struct CameraController {
     focus: Vec3,
-    radius: f32,
+    distance: f32,
 }
 
 /// Cursor for camera
@@ -61,7 +61,7 @@ impl CameraController {
     fn new(pos: Vec3, focus: Vec3) -> Self {
         CameraController {
             focus,
-            radius: pos.distance(focus),
+            distance: pos.distance(focus),
         }
     }
 
@@ -69,7 +69,7 @@ impl CameraController {
     fn update_transform(&self, xform: &mut Transform) {
         let rot = Mat3::from_quat(xform.rotation);
         xform.translation =
-            self.focus + rot.mul_vec3(Vec3::new(0.0, 0.0, self.radius));
+            self.focus + rot.mul_vec3(Vec3::new(0.0, 0.0, self.distance));
     }
 
     /// Pan camera
@@ -79,7 +79,7 @@ impl CameraController {
             motion * Vec2::new(proj.fov * proj.aspect_ratio, proj.fov) / win_sz;
         let right = xform.rotation * Vec3::X * -pan.x;
         let up = xform.rotation * Vec3::Y * pan.y;
-        let translation = (right + up) * self.radius;
+        let translation = (right + up) * self.distance;
         self.focus += translation;
         self.update_transform(xform);
     }
@@ -98,7 +98,7 @@ impl CameraController {
     fn forward_reverse(&mut self, xform: &mut Transform, motion: f32) {
         let pos = xform.translation;
         let rot = Mat3::from_quat(xform.rotation);
-        let dist = self.radius + motion * self.radius * 0.1;
+        let dist = self.distance + motion * self.distance * 0.1;
         self.focus = pos - rot.mul_vec3(Vec3::new(0.0, 0.0, dist));
         self.update_transform(xform);
     }
@@ -106,9 +106,9 @@ impl CameraController {
     /// Zoom camera in or out
     fn zoom(&mut self, xform: &mut Transform, motion: f32) {
         if motion < 0.0 {
-            self.radius -= motion * self.radius.max(1.0) * 0.1;
+            self.distance -= motion * self.distance.max(1.0) * 0.1;
         } else {
-            self.radius -= motion * self.radius * 0.1;
+            self.distance -= motion * self.distance * 0.1;
         }
         self.update_transform(xform);
     }
@@ -242,7 +242,10 @@ fn spawn_camera(
     }
     scene_res.state = SceneState::StartAnimation;
     let aabb = bounding_box_meshes(query);
-    commands.spawn(camera_bundle(aabb));
+    let (bundle, cam) = camera_bundle(aabb);
+    let mut xform = Transform::from_translation(aabb.center.into());
+    xform.scale = Vec3::splat(cam.distance * 0.02);
+    commands.spawn((bundle, cam));
     commands.spawn((
         Cursor,
         MaterialMeshBundle {
@@ -251,7 +254,7 @@ fn spawn_camera(
                 base_color: Color::FUCHSIA,
                 ..Default::default()
             }),
-            transform: Transform::from_translation(aabb.center.into()),
+            transform: xform,
             ..Default::default()
         },
     ));
@@ -345,7 +348,7 @@ fn control_animation(
 /// System to draw cursor gizmo
 fn draw_cursor(mut gizmos: Gizmos, query: Query<&Transform, With<Cursor>>) {
     for xform in &query {
-        gizmos.cuboid(xform.clone(), Color::FUCHSIA);
+        gizmos.cuboid(*xform, Color::FUCHSIA);
     }
 }
 
@@ -418,7 +421,7 @@ fn zoom_camera(
                 cam.zoom(&mut xform, motion);
             };
             focus = cam.focus;
-            scale = cam.radius;
+            scale = cam.distance;
         }
         if let Ok(mut xform) = queries.p1().get_single_mut() {
             xform.translation = focus;
