@@ -402,6 +402,7 @@ fn pan_rotate_camera(
 ) {
     if !mouse.pressed(MouseButton::Right) && !mouse.pressed(MouseButton::Middle)
     {
+        ev_motion.clear();
         return;
     }
 
