@@ -384,7 +384,7 @@ impl Ring {
 
     /// Get points offset by a fixed angle (in descending order)
     pub(crate) fn points_offset(&self, hs_other: Degrees) -> Vec<Point> {
-        let mut pts = Vec::new();
+        let mut pts = Vec::with_capacity(self.points.len());
         for point in self.points() {
             let mut point = point.clone();
             // adjust degrees by half step of other ring

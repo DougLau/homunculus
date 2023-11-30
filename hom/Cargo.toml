@@ -13,7 +13,7 @@ anyhow = "1.0"
 argh = "0.1"
 bevy = "0.12"
 glam = { workspace = true }
-homunculus = "0.4"
+homunculus = { path = "../homunculus" }
 muon-rs = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
