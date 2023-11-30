@@ -17,4 +17,5 @@ thiserror = "1"
 
 [dev-dependencies]
 anyhow = "1"
+argh = "0.1"
 fastrand = "2"

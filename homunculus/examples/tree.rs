@@ -1,8 +1,17 @@
 // tree example
 use anyhow::Result;
+use argh::FromArgs;
 use glam::Vec3;
 use homunculus::{Husk, Ring};
 use std::fs::File;
+
+/// Command-line arguments
+#[derive(FromArgs, PartialEq, Debug)]
+struct Args {
+    /// random seed
+    #[argh(positional)]
+    seed: Option<u64>,
+}
 
 #[derive(Debug)]
 struct Branch {
@@ -53,6 +62,10 @@ fn make_branch(husk: &mut Husk, mut scale: f32) -> Result<Vec<Branch>> {
 }
 
 fn main() -> Result<()> {
+    let args: Args = argh::from_env();
+    if let Some(seed) = args.seed {
+        fastrand::seed(seed);
+    }
     let mut husk = Husk::new();
     let mut branches = make_branch(&mut husk, 1.0)?;
     while !branches.is_empty() {
