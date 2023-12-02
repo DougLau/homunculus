@@ -184,7 +184,7 @@ impl Ring {
         };
         ring.transform_rotate(axis);
         for (order, vid) in branch.edge_angles(&ring, builder) {
-            ring.push_pt(Pt::Vertex(vid), order);
+            ring.points.push(Point::new(Pt::Vertex(vid), order));
         }
         ring
     }
@@ -359,22 +359,17 @@ impl Ring {
             match &spoke.label {
                 None => {
                     let vid = builder.push_vtx(pos);
-                    let point = Point::new(Pt::Vertex(vid), order);
-                    points.push(point);
+                    points.push(Point::new(Pt::Vertex(vid), order));
                 }
                 Some(label) => {
-                    let point =
-                        Point::new(Pt::Branch(label.to_string(), pos), order);
-                    points.push(point);
+                    points.push(Point::new(
+                        Pt::Branch(label.to_string(), pos),
+                        order,
+                    ));
                 }
             }
         }
         self.points = points;
-    }
-
-    /// Push point on ring
-    pub(crate) fn push_pt(&mut self, pt: Pt, order: Degrees) {
-        self.points.push(Point::new(pt, order));
     }
 
     /// Get iterator of points on ring
