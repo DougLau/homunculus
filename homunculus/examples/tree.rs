@@ -41,13 +41,11 @@ fn make_branch(husk: &mut Husk, mut scale: f32) -> Result<Vec<Branch>> {
     let mut i = 0;
     while scale > 0.05 {
         let ring;
-        if i % 3 == 1 && fastrand::f32() > scale {
+        let sc = scale * 0.5;
+        if i % 3 == 1 && fastrand::f32() > scale && sc > 0.05 {
             let label = format!("B{}", fastrand::u16(..10000));
             ring = make_ring(Some(&label));
-            branches.push(Branch {
-                label,
-                scale: scale * 0.5,
-            });
+            branches.push(Branch { label, scale: sc });
         } else {
             ring = make_ring(None);
         }
