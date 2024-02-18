@@ -8,6 +8,7 @@ edition = "2021"
 
 [workspace.dependencies]
 glam = { version = "0.24", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
 
 [patch.crates-io]
 homunculus = { path = "./homunculus" }

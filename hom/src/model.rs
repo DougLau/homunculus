@@ -1,11 +1,11 @@
 // model.rs     Model definitions
 //
-// Copyright (c) 2022-2023  Douglas Lau
+// Copyright (c) 2022-2024  Douglas Lau
 //
 use anyhow::{anyhow, bail, Error};
 use glam::Vec3;
 use homunculus::{Husk, Ring, Shading};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 type Result<T> = std::result::Result<T, Error>;
