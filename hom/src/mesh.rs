@@ -1,4 +1,5 @@
 use bevy::render::mesh::{Indices, Mesh};
+use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 use glam::Vec3;
 
@@ -49,10 +50,13 @@ impl MeshBuilder {
 
     /// Build the mesh
     pub fn build(self) -> Mesh {
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.pos);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.norm);
-        mesh.set_indices(Some(Indices::U16(self.indices)));
+        mesh.insert_indices(Indices::U16(self.indices));
         mesh
     }
 }

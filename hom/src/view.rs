@@ -1,6 +1,6 @@
 // view.rs      View module
 //
-// Copyright (c) 2022-2023  Douglas Lau
+// Copyright (c) 2022-2024  Douglas Lau
 //
 use crate::cube::build_cube;
 use bevy::{
@@ -120,7 +120,7 @@ pub fn view_gltf(folder: String, path: PathBuf) {
     app.insert_resource(PathConfig { path })
         .insert_resource(AmbientLight {
             color: Color::WHITE,
-            brightness: 0.5,
+            brightness: 500.0,
         })
         .add_plugins(
             DefaultPlugins
@@ -139,13 +139,7 @@ pub fn view_gltf(folder: String, path: PathBuf) {
         .add_plugins(WireframePlugin)
         .add_systems(
             Startup,
-            (
-                init_wireframe,
-                init_gizmo,
-                spawn_light,
-                spawn_help,
-                start_loading,
-            ),
+            (init_wireframe, init_gizmo, spawn_light, start_loading),
         )
         .add_systems(
             Update,
@@ -173,10 +167,12 @@ fn init_wireframe(mut wireframe_config: ResMut<WireframeConfig>) {
 }
 
 /// System to initialize gizmo config
-fn init_gizmo(mut config: ResMut<GizmoConfig>) {
-    config.line_width = 10.0;
-    config.line_perspective = true;
-    config.depth_bias = -1.0;
+fn init_gizmo(mut config_store: ResMut<GizmoConfigStore>) {
+    for (_, config, _) in config_store.iter_mut() {
+        config.line_width = 10.0;
+        config.line_perspective = true;
+        config.depth_bias = -1.0;
+    }
 }
 
 /// System to spawn light
@@ -191,8 +187,9 @@ fn spawn_light(mut commands: Commands) {
 }
 
 /// System to spawn help text
-fn spawn_help(mut commands: Commands) {
-    commands.spawn(
+fn spawn_help(commands: &mut Commands, camera_id: Entity) {
+    commands.spawn((
+        TargetCamera(camera_id),
         TextBundle::from_section(
             "_____ Mouse _____\n\
              right: pan camera\n\
@@ -217,7 +214,7 @@ fn spawn_help(mut commands: Commands) {
             right: Val::Px(12.0),
             ..default()
         }),
-    );
+    ));
 }
 
 /// System to start loading scene
@@ -282,7 +279,8 @@ fn spawn_camera(
     let (bundle, cam) = camera_bundle(aabb);
     let mut xform = Transform::from_translation(aabb.center.into());
     xform.scale = Vec3::splat(cam.distance * 0.02);
-    commands.spawn((bundle, cam));
+    let id = commands.spawn((bundle, cam)).id();
+    spawn_help(&mut commands, id);
     commands.spawn((
         Cursor,
         MaterialMeshBundle {
@@ -302,7 +300,8 @@ fn spawn_camera(
     commands.spawn((
         Stage,
         MaterialMeshBundle {
-            mesh: meshes.add(Mesh::from(shape::Plane::from_size(size))),
+            mesh: meshes
+                .add(Mesh::from(Plane3d::default().mesh().size(size, size))),
             material: materials.add(StandardMaterial {
                 base_color: Color::DARK_GREEN,
                 ..default()
@@ -360,7 +359,7 @@ fn start_animation(
 /// System to control animations
 fn control_animation(
     scene_res: Res<SceneRes>,
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut players: Query<&mut AnimationPlayer>,
     mut animation_idx: Local<usize>,
     mut is_changing: Local<bool>,
@@ -393,7 +392,7 @@ fn draw_cursor(mut gizmos: Gizmos, query: Query<&Transform, With<Cursor>>) {
 #[allow(clippy::type_complexity)]
 fn pan_rotate_camera(
     windows: Query<&Window, With<PrimaryWindow>>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut ev_motion: EventReader<MouseMotion>,
     mut queries: ParamSet<(
         Query<(&mut CameraController, &mut Transform)>,
@@ -435,7 +434,7 @@ fn primary_window_size(windows: Query<&Window, With<PrimaryWindow>>) -> Vec2 {
 /// System to zoom the camera
 #[allow(clippy::type_complexity)]
 fn zoom_camera(
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut ev_scroll: EventReader<MouseWheel>,
     mut queries: ParamSet<(
         Query<(&mut CameraController, &mut Transform)>,
@@ -468,13 +467,13 @@ fn zoom_camera(
 /// System to update the directional light
 #[allow(clippy::type_complexity)]
 fn update_light_direction(
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut queries: ParamSet<(
         Query<&Transform, With<CameraController>>,
         Query<&mut Transform, With<DirectionalLight>>,
     )>,
 ) {
-    if keyboard.just_pressed(KeyCode::D) {
+    if keyboard.just_pressed(KeyCode::KeyD) {
         let cam_rot = queries.p0().get_single().unwrap().rotation;
         for mut xform in &mut queries.p1() {
             xform.rotation = cam_rot;
@@ -484,10 +483,10 @@ fn update_light_direction(
 
 /// System to toggle stage
 fn toggle_stage(
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Visibility, With<Stage>>,
 ) {
-    if keyboard.just_pressed(KeyCode::S) {
+    if keyboard.just_pressed(KeyCode::KeyS) {
         let mut vis = query.single_mut();
         *vis = if *vis == Visibility::Hidden {
             Visibility::Visible
@@ -499,20 +498,20 @@ fn toggle_stage(
 
 /// System to toggle wireframe
 fn toggle_wireframe(
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut wireframe_config: ResMut<WireframeConfig>,
 ) {
-    if keyboard.just_pressed(KeyCode::W) {
+    if keyboard.just_pressed(KeyCode::KeyW) {
         wireframe_config.global = !wireframe_config.global;
     }
 }
 
 /// System to toggle help text
 fn toggle_help(
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Visibility, With<Text>>,
 ) {
-    if keyboard.just_pressed(KeyCode::Q) {
+    if keyboard.just_pressed(KeyCode::KeyQ) {
         for mut vis in &mut query {
             *vis = if *vis == Visibility::Hidden {
                 Visibility::Visible

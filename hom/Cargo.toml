@@ -11,7 +11,7 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0"
 argh = "0.1"
-bevy = "0.12"
+bevy = "0.13"
 glam = { workspace = true }
 homunculus = { path = "../homunculus" }
 muon-rs = "0.2"
