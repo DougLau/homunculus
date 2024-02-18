@@ -1,6 +1,6 @@
 // gltf.rs      glTF module
 //
-// Copyright (c) 2022-2023  Douglas Lau
+// Copyright (c) 2022-2024  Douglas Lau
 //
 use crate::mesh::Mesh;
 use serde_json::{json, Value};
@@ -61,7 +61,7 @@ impl Builder {
             "type": "SCALAR",
             "count": mesh.indices().len(),
         }));
-        let v = self.push_view(mesh.indices(), Target::ElementArrayBuffer);
+        let v = self.push_index_view(mesh.indices());
         self.views.push(v);
         // positions
         let pos_view = self.views.len();
@@ -73,7 +73,7 @@ impl Builder {
             "min": mesh.pos_min(),
             "max": mesh.pos_max(),
         }));
-        let v = self.push_view(mesh.positions(), Target::ArrayBuffer);
+        let v = self.push_array_view(mesh.positions());
         self.views.push(v);
         // normals
         let norm_view = self.views.len();
@@ -83,7 +83,7 @@ impl Builder {
             "type": "VEC3",
             "count": count,
         }));
-        let v = self.push_view(mesh.normals(), Target::ArrayBuffer);
+        let v = self.push_array_view(mesh.normals());
         self.views.push(v);
         // mesh
         self.meshes.push(json!({
@@ -97,8 +97,25 @@ impl Builder {
         }));
     }
 
-    /// Push a view
-    fn push_view<V>(&mut self, buf: &[V], target: Target) -> Value {
+    /// Push an index view
+    fn push_index_view<V>(&mut self, buf: &[V]) -> Value {
+        while self.bin.len() % 4 != 0 {
+            self.bin.push(0);
+        }
+        let byte_offset = self.bin.len();
+        let bytes = as_u8_slice(buf);
+        self.bin.extend_from_slice(bytes);
+        // no byteStride for index view
+        json!({
+            "buffer": 0,
+            "byteLength": bytes.len(),
+            "byteOffset": byte_offset,
+            "target": Target::ElementArrayBuffer,
+        })
+    }
+
+    /// Push an array view
+    fn push_array_view<V>(&mut self, buf: &[V]) -> Value {
         while self.bin.len() % 4 != 0 {
             self.bin.push(0);
         }
@@ -110,7 +127,7 @@ impl Builder {
             "byteLength": bytes.len(),
             "byteOffset": byte_offset,
             "byteStride": size_of::<V>(),
-            "target": target,
+            "target": Target::ArrayBuffer,
         })
     }
 
