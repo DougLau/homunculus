@@ -192,8 +192,8 @@ fn spawn_help(commands: &mut Commands, camera_id: Entity) {
         TargetCamera(camera_id),
         TextBundle::from_section(
             "_____ Mouse _____\n\
-             right: pan camera\n\
-             middle: rotate camera\n\
+             left: pan camera\n\
+             right: rotate camera\n\
              wheel: zoom camera\n\
              /pressed: forward/back\n\
              \n\
@@ -399,26 +399,20 @@ fn pan_rotate_camera(
         Query<&mut Transform, With<Cursor>>,
     )>,
 ) {
-    if !mouse.pressed(MouseButton::Right) && !mouse.pressed(MouseButton::Middle)
-    {
-        ev_motion.clear();
-        return;
-    }
-
     let mut motion = Vec2::ZERO;
     for ev in ev_motion.read() {
         motion += ev.delta;
     }
     if motion.length_squared() > 0.0 {
-        let win_sz = primary_window_size(windows);
         if let Ok((mut cam, mut xform)) = queries.p0().get_single_mut() {
-            if mouse.pressed(MouseButton::Right) {
+            let win_sz = primary_window_size(windows);
+            if mouse.pressed(MouseButton::Left) {
                 cam.pan(&mut xform, motion, win_sz);
                 let focus = cam.focus;
                 if let Ok(mut xform) = queries.p1().get_single_mut() {
                     xform.translation = focus;
                 };
-            } else {
+            } else if mouse.pressed(MouseButton::Right) {
                 cam.rotate(&mut xform, motion, win_sz);
             }
         }
