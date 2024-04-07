@@ -144,12 +144,12 @@ pub fn view_gltf(folder: String, path: PathBuf) {
         .add_systems(
             Update,
             (
-                draw_cursor,
                 spawn_scene,
                 check_ready,
                 spawn_camera,
                 start_animation,
                 control_animation,
+                draw_cursor,
                 pan_rotate_camera,
                 zoom_camera,
                 update_light_direction,

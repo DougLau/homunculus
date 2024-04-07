@@ -172,6 +172,8 @@ impl Ring {
     pub(crate) fn with_branch(branch: Branch, builder: &MeshBuilder) -> Self {
         let center = branch.center();
         let axis = branch.axis(builder, center);
+        // FIXME: rotate xform so that X-axis aligns with parent rings
+        //        and positive Z-axis is transverse
         let xform = Affine3A::from_translation(center);
         let count = branch.edges.len();
         let mut ring = Ring {

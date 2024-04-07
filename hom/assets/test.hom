@@ -1,14 +1,25 @@
-# Test .hom file with two slight bends
+# Test .hom file with double branch
 ring:
   points: 1 * 6
   scale: 0.5
   shading: Flat
 ring:
-  axis: 0.1 1 0
+ring:
+  points: b 1 * 5
+ring:
+  points: 1 * 6
 ring:
 ring:
+  branch: b
+  axis: -0.5 1 0
 ring:
-  axis: -0.1 1 0.1
 ring:
+  points: c 1 * 5
+ring:
+  points: 1 * 6
+ring:
+ring:
+  branch: c
+  axis: -0.5 1 0
 ring:
 ring:
